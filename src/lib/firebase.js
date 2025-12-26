@@ -1,6 +1,8 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore'
+import { getFirestore, doc, setDoc, getDoc, collection, addDoc, increment } from 'firebase/firestore'
+import { dbQuota } from './firebaseQuota'
+import { tokens, proveedores, process_cost, process_margin, api_cost } from './bridges'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -16,7 +18,119 @@ const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 
-// Función para guardar el contador en Firestore
+// Función para obtener la cuota disponible de un proveedor (desde flux-ia-182)
+async function getQuotaForProvider(proveedor) {
+  try {
+    const quotaDocRef = doc(dbQuota, 'power', proveedor)
+    const docSnap = await getDoc(quotaDocRef)
+    if (docSnap.exists()) {
+      return docSnap.data().segundos || 0
+    }
+    return 0
+  } catch (error) {
+    console.error(`Error al obtener cuota de ${proveedor}:`, error)
+    return 0
+  }
+}
+
+// Función para actualizar la cuota de un proveedor (en flux-ia-182)
+async function updateQuotaForProvider(proveedor, segundosRestantes) {
+  try {
+    const quotaDocRef = doc(dbQuota, 'power', proveedor)
+    await setDoc(quotaDocRef, { segundos: segundosRestantes }, { merge: true })
+  } catch (error) {
+    console.error(`Error al actualizar cuota de ${proveedor}:`, error)
+  }
+}
+
+// Función revisor de cuotas (similar a Python)
+export async function revisorCuotas() {
+  console.log('🔍 Revisando cuotas de proveedores...')
+  
+  const totalElementos = proveedores.length
+  
+  for (let indice = 0; indice < proveedores.length; indice++) {
+    const proveedor = proveedores[indice]
+    console.log(`📊 Revisando: ${proveedor}`)
+    
+    const quotaDisponible = await getQuotaForProvider(proveedor)
+    console.log(`   Servidor ${proveedor}: ${quotaDisponible} segundos disponibles`)
+    
+    if (quotaDisponible > process_cost) {
+      console.log(`✅ Servidor seleccionado: ${proveedor} (${quotaDisponible} segundos)`)
+      
+      // Si es el último elemento, revisar si necesita encendido preventivo
+      if (indice === totalElementos - 1) {
+        console.log('⚠️  Último elemento - verificando encendido preventivo')
+        const quotasRestantes = quotaDisponible - process_cost
+        console.log(`   Cuota después del proceso: ${quotasRestantes}`)
+        
+        if (quotasRestantes < process_margin) {
+          console.log('🔥 Activando encendido preventivo (crédito costo)')
+          // Aquí iría la lógica para activar un nuevo crédito
+          // Por ahora solo lo registramos
+        }
+      }
+      
+      // NO actualizar cuota aquí - se hará DESPUÉS de que se genere la imagen exitosamente
+      return {
+        proveedor: proveedor,
+        token: tokens[proveedor],
+        quotaDisponible: quotaDisponible,
+        quotaUsada: process_cost
+      }
+    }
+  }
+  
+  // Si llegó aquí, ninguno tiene cuota suficiente
+  console.log('❌ Ningún proveedor tiene cuota suficiente - usando crédito COSTO')
+  return {
+    proveedor: 'costo',
+    token: tokens.costo,
+    quotaDisponible: 0,
+    quotaUsada: api_cost
+  }
+}
+
+// Exportar función para actualizar cuota (se llamará después de generar imagen)
+export async function actualizarCuotaDespuesDeGenerar(proveedor, quotaDisponible) {
+  if (proveedor === 'costo') {
+    console.log('⏭️  No se actualiza cuota para proveedor "costo"')
+    return
+  }
+  
+  const nuevaCuota = quotaDisponible - process_cost
+  console.log(`💾 Actualizando cuota de ${proveedor}: ${quotaDisponible} → ${nuevaCuota}`)
+  await updateQuotaForProvider(proveedor, nuevaCuota)
+}
+
+// Función para registrar nuevo usuario en Firestore
+export async function registrarNuevoUsuario(user) {
+  try {
+    // Usar UID como ID del documento (simple, único y sin duplicados)
+    const userDocRef = doc(db, 'usuarios_ig', user.uid)
+    const docSnap = await getDoc(userDocRef)
+    
+    // Si NO existe = crear
+    if (!docSnap.exists()) {
+      await setDoc(userDocRef, {
+        uid: user.uid,
+        displayName: user.displayName || 'Usuario',
+        email: user.email,
+        fecha_registro: new Date().toISOString(),
+        usos: 0  // Inicializar contador de imágenes generadas
+      })
+      console.log('✅ Nuevo usuario registrado:', user.uid)
+      return true
+    } else {
+      console.log('ℹ️  Usuario existente:', user.uid)
+      return false
+    }
+  } catch (error) {
+    console.error('❌ Error registrando usuario:', error)
+    return false
+  }
+}
 export async function saveCounterToFirestore(userId, counterValue) {
   try {
     const userDocRef = doc(db, 'usuarios_ig', userId)
@@ -31,7 +145,6 @@ export async function saveCounterToFirestore(userId, counterValue) {
   }
 }
 
-// Función para obtener el contador guardado
 export async function getCounterFromFirestore(userId) {
   try {
     const userDocRef = doc(db, 'usuarios_ig', userId)
@@ -43,5 +156,60 @@ export async function getCounterFromFirestore(userId) {
   } catch (error) {
     console.error('Error al obtener el contador:', error)
     return 0
+  }
+}
+
+// Función para guardar log de generación de imagen
+export async function guardarLogGeneracion(user, prompt, seed, proveedor) {
+  try {
+    const logRef = collection(db, 'log_ig')
+    await addDoc(logRef, {
+      uid: user.uid,
+      displayName: user.displayName || 'Usuario',
+      email: user.email,
+      prompt: prompt,
+      seed: seed,
+      proveedor: proveedor,
+      fecha_creacion: new Date().toISOString()
+    })
+    console.log('📝 Log generación guardado')
+    return true
+  } catch (error) {
+    console.error('❌ Error guardando log:', error)
+    return false
+  }
+}
+
+// Función para guardar log de errores
+export async function guardarLogError(user, prompt, errorMessage, proveedorIntentado) {
+  try {
+    const logErrorRef = collection(db, 'log_errores_ig')
+    await addDoc(logErrorRef, {
+      uid: user.uid,
+      displayName: user.displayName || 'Usuario',
+      email: user.email,
+      prompt: prompt,
+      error_message: errorMessage,
+      proveedor_intentado: proveedorIntentado,
+      fecha_error: new Date().toISOString()
+    })
+    console.log('⚠️  Log de error guardado')
+    return true
+  } catch (error) {
+    console.error('❌ Error guardando log de error:', error)
+    return false
+  }
+}
+
+// Función para incrementar el contador de usos (imágenes generadas)
+export async function incrementarUsos(user) {
+  try {
+    const userDocRef = doc(db, 'usuarios_ig', user.uid)
+    await setDoc(userDocRef, { usos: increment(1) }, { merge: true })
+    console.log('✅ Contador de usos incrementado')
+    return true
+  } catch (error) {
+    console.error('❌ Error incrementando usos:', error)
+    return false
   }
 }

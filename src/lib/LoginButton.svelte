@@ -4,6 +4,11 @@
   import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth'
 
   let error = null
+  
+  $: if ($user) {
+    console.log('Usuario logueado:', $user.displayName)
+    console.log('Photo URL:', $user.photoURL)
+  }
 
   async function handleGoogleLogin() {
     try {
@@ -47,6 +52,24 @@
     height: 40px;
     border-radius: 50%;
     object-fit: cover;
+    background: #ff3e00;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.5rem;
+  }
+  
+  .avatar-fallback {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #ff3e00;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.5rem;
   }
 
   .user-details {
@@ -103,7 +126,16 @@
   {#if $user}
     <div class="user-info">
       {#if $user.photoURL}
-        <img src={$user.photoURL} alt="Avatar" class="user-avatar" />
+        <img 
+          src={$user.photoURL} 
+          alt="Avatar" 
+          class="user-avatar" 
+          onload="console.log('✅ Imagen avatar cargada')"
+          onerror="console.log('❌ Error cargando avatar'); this.style.display='none'; this.nextElementSibling.style.display='flex'" 
+        />
+        <div class="avatar-fallback" style="display: none;">👤</div>
+      {:else}
+        <div class="avatar-fallback">👤</div>
       {/if}
       <div class="user-details">
         <div class="user-name">{$user.displayName || 'Usuario'}</div>
