@@ -101,6 +101,18 @@
     background: #ff6040;
   }
 
+  .logout-button {
+    background: #e0e0e0;
+    color: #666;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+  }
+
+  .logout-button:hover {
+    background: #d0d0d0;
+  }
+
   .error {
     color: #d32f2f;
     margin-top: 0.5rem;
@@ -142,7 +154,7 @@
         <div class="user-email">{$user.email}</div>
       </div>
     </div>
-    <button on:click={handleLogout}>Cerrar sesión</button>
+    <button class="logout-button" on:click={handleLogout}>Cerrar sesión</button>
   {:else}
     <button class="google-button" on:click={handleGoogleLogin}>
       🔐 Iniciar sesión con Google

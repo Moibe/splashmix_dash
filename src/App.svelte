@@ -21,6 +21,28 @@
     generatedImage = null
     textContent = ''
   }
+
+  function downloadImage() {
+    if (!generatedImage) return
+    
+    // Obtener la imagen como blob y descargar
+    fetch(generatedImage)
+      .then(res => res.blob())
+      .then(blob => {
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `splashmix-${Date.now()}.png`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+        console.log('⬇️ Imagen descargada')
+      })
+      .catch(err => {
+        console.error('❌ Error descargando imagen:', err)
+      })
+  }
   
   async function generateImage() {
     if (!textContent.trim()) {
@@ -142,7 +164,7 @@
     margin-bottom: 2rem;
   }
   
-  h1 { color: #ff3e00; margin: 0; }
+  h1 { color: #2563eb; margin: 0; font-size: 2rem; }
   
   .text-area-container {
     margin: 2rem 0;
@@ -237,6 +259,38 @@
     border-radius: 4px;
     color: #333;
   }
+
+  .image-wrapper {
+    position: relative;
+    width: 100%;
+  }
+
+  .download-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.6);
+    border: none;
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    z-index: 10;
+  }
+
+  .download-btn:hover {
+    background: rgba(0, 0, 0, 0.8);
+    transform: scale(1.1);
+  }
+
+  .download-btn:active {
+    transform: scale(0.95);
+  }
   
   .create-button:active {
     transform: scale(0.98);
@@ -282,8 +336,8 @@
 <main>
   <div class="header">
     <div>
-      <h1>Images</h1>
-      <p>Esta es una app mínima de <strong>{name}</strong> (Vite + Svelte).</p>
+      <h1>Splashmix - Generador de Imágenes</h1>
+      <p>Escribe un prompt y genera imágenes</p>
     </div>
     <LoginButton />
   </div>
@@ -302,11 +356,6 @@
     <div class="progress-bar">
       <div class="progress-fill" style="width: {progress}%"></div>
     </div>
-    {#if selectedProvider}
-      <div class="provider-info">
-        Generando con: <strong>{selectedProvider}</strong>
-      </div>
-    {/if}
   {/if}
   
   {#if error}
@@ -316,7 +365,12 @@
   <div class="image-container">
     <div class="image-display">
       {#if generatedImage}
-        <img src={generatedImage} alt="Imagen generada" />
+        <div class="image-wrapper">
+          <img src={generatedImage} alt="Imagen generada" />
+          <button class="download-btn" on:click={downloadImage} title="Descargar imagen">
+            ⬇️
+          </button>
+        </div>
       {:else}
         <p>La imagen aparecerá aquí</p>
       {/if}
