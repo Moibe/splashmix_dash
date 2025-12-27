@@ -6,4 +6,3 @@ dist/
 config_prod.json
 *.json.example
 src/lib/bridges.js
-src/lib/firebaseQuota.js
