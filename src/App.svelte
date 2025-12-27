@@ -175,7 +175,7 @@
   textarea {
     width: 100%;
     max-width: 600px;
-    min-height: 80px;
+    min-height: 40px;
     padding: 1rem;
     border: 2px solid #ff3e00;
     border-radius: 8px;
@@ -343,7 +343,7 @@
   </div>
   
   <div class="text-area-container">
-    <textarea disabled={!$user} bind:value={textContent} placeholder="Escribe algo aquí..."></textarea>
+    <textarea disabled={!$user} bind:value={textContent} placeholder="Escribe algo aquí, por ejemplo: Un astronauta flotando en el espacio"></textarea>
   </div>
   
   <div class="button-container">
