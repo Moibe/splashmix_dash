@@ -1,0 +1,69 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build project
+        run: npm run build
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H imagen.splashmix.ink >> ~/.ssh/known_hosts
+
+      - name: Deploy to server
+        run: |
+          ssh root@imagen.splashmix.ink << 'EOF'
+          cd /root/code/splashmix_dash
+          git pull origin main
+          npm install
+          npm run build
+          systemctl restart nginx
+          echo "✅ Deploy completado exitosamente"
+          EOF
+
+      - name: Copy sensitive files
+        run: |
+          scp -r src/lib/bridges.js root@imagen.splashmix.ink:/root/code/splashmix_dash/src/lib/
+          scp -r src/lib/firebaseQuota.js root@imagen.splashmix.ink:/root/code/splashmix_dash/src/lib/
+          ssh root@imagen.splashmix.ink "echo '✅ Archivos sensibles copiados'"
+
+      - name: Verify deployment
+        run: |
+          ssh root@imagen.splashmix.ink << 'EOF'
+          if [ -d /root/code/splashmix_dash/dist ]; then
+            echo "✅ Build verificado"
+            ls -la /root/code/splashmix_dash/dist | head -5
+          else
+            echo "❌ Build no encontrado"
+            exit 1
+          fi
+          EOF
+
+      - name: Deployment summary
+        if: success()
+        run: echo "🚀 Deploy a imagen.splashmix.ink completado exitosamente"
+
+      - name: Notify deployment failure
+        if: failure()
+        run: echo "❌ El deploy falló. Revisa los logs arriba."
