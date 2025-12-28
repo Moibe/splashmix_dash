@@ -44,7 +44,13 @@
     display: flex;
     align-items: center;
     gap: 1rem;
-    margin-bottom: 1rem;
+    justify-content: space-between;
+  }
+
+  .user-profile {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
   }
 
   .user-avatar {
@@ -106,7 +112,8 @@
     color: #666;
     padding: 0.4rem 0.8rem;
     font-size: 0.9rem;
-    margin-top: 0.5rem;
+    margin: 0;
+    flex-shrink: 0;
   }
 
   .logout-button:hover {
@@ -137,24 +144,26 @@
 <div class="auth-container">
   {#if $user}
     <div class="user-info">
-      {#if $user.photoURL}
-        <img 
-          src={$user.photoURL} 
-          alt="Avatar" 
-          class="user-avatar" 
-          onload="console.log('✅ Imagen avatar cargada')"
-          onerror="console.log('❌ Error cargando avatar'); this.style.display='none'; this.nextElementSibling.style.display='flex'" 
-        />
-        <div class="avatar-fallback" style="display: none;">👤</div>
-      {:else}
-        <div class="avatar-fallback">👤</div>
-      {/if}
-      <div class="user-details">
-        <div class="user-name">{$user.displayName || 'Usuario'}</div>
-        <div class="user-email">{$user.email}</div>
+      <div class="user-profile">
+        {#if $user.photoURL}
+          <img 
+            src={$user.photoURL} 
+            alt="Avatar" 
+            class="user-avatar" 
+            onload="console.log('✅ Imagen avatar cargada')"
+            onerror="console.log('❌ Error cargando avatar'); this.style.display='none'; this.nextElementSibling.style.display='flex'" 
+          />
+          <div class="avatar-fallback" style="display: none;">👤</div>
+        {:else}
+          <div class="avatar-fallback">👤</div>
+        {/if}
+        <div class="user-details">
+          <div class="user-name">{$user.displayName || 'Usuario'}</div>
+          <div class="user-email">{$user.email}</div>
+        </div>
       </div>
+      <button class="logout-button" on:click={handleLogout}>Cerrar sesión</button>
     </div>
-    <button class="logout-button" on:click={handleLogout}>Cerrar sesión</button>
   {:else}
     <button class="google-button" on:click={handleGoogleLogin}>
       🔐 Iniciar sesión con Google

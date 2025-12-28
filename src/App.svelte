@@ -337,7 +337,6 @@
   <div class="header">
     <div>
       <h1>Splashmix - Generador de Imágenes</h1>
-      <p>Escribe un prompt y genera imágenes</p>
     </div>
     <LoginButton />
   </div>
