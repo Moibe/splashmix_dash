@@ -38,11 +38,16 @@ jobs:
       - name: Deploy to server
         run: |
           ssh root@imagen.splashmix.ink << 'EOF'
+          set -e
           cd /root/code/splashmix_dash
-          git pull origin main
-          npm install
-          npm run build
-          systemctl restart nginx
+          echo "📡 Git pull..."
+          git pull origin main || exit 1
+          echo "📦 Installing dependencies..."
+          npm install || exit 1
+          echo "🔨 Building..."
+          npm run build || exit 1
+          echo "🔄 Restarting nginx..."
+          systemctl restart nginx || exit 1
           echo "✅ Deploy completado exitosamente"
           EOF
 
