@@ -39,6 +39,7 @@ jobs:
         run: |
           ssh root@imagen.splashmix.ink << 'EOF'
           set -e
+          source ~/.bashrc
           cd /root/code/splashmix_dash
           echo "📡 Git pull..."
           git pull origin main || exit 1
