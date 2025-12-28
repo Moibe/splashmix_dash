@@ -21,15 +21,19 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build project
-        run: npm run build
-
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H imagen.splashmix.ink >> ~/.ssh/known_hosts
+
+      - name: Download sensitive files from server
+        run: |
+          scp root@imagen.splashmix.ink:/root/code/splashmix_dash/src/lib/bridges.js src/lib/
+
+      - name: Build project
+        run: npm run build
 
       - name: Deploy to server
         run: |
@@ -41,12 +45,6 @@ jobs:
           systemctl restart nginx
           echo "✅ Deploy completado exitosamente"
           EOF
-
-      - name: Copy sensitive files
-        run: |
-          scp -r src/lib/bridges.js root@imagen.splashmix.ink:/root/code/splashmix_dash/src/lib/
-          scp -r src/lib/firebaseQuota.js root@imagen.splashmix.ink:/root/code/splashmix_dash/src/lib/
-          ssh root@imagen.splashmix.ink "echo '✅ Archivos sensibles copiados'"
 
       - name: Verify deployment
         run: |
