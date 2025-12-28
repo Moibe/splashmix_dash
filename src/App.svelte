@@ -343,7 +343,7 @@
   </div>
   
   <div class="text-area-container">
-    <textarea disabled={!$user} bind:value={textContent} placeholder="Escribe algo aquí, por ejemplo: Un astronauta flotando en el espacio"></textarea>
+    <textarea disabled={!$user} bind:value={textContent} placeholder="Escribe lo que quieres crear aquí, por ejemplo: Un astronauta flotando en el espacio."></textarea>
   </div>
   
   <div class="button-container">
