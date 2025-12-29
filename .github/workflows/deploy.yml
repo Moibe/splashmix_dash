@@ -37,22 +37,13 @@ jobs:
 
       - name: Deploy to server
         run: |
-          cat > /tmp/deploy.sh << 'SCRIPT'
-          #!/bin/bash
-          set -e
+          ssh root@imagen.splashmix.ink << 'DEPLOY'
           cd /root/code/splashmix_dash
-          echo "📡 Git pull..."
           git pull origin main
-          echo "📦 Installing dependencies..."
           npm install
-          echo "🔨 Building..."
           npm run build
-          echo "🔄 Restarting nginx..."
           systemctl restart nginx
-          echo "✅ Deploy completado exitosamente"
-          SCRIPT
-          
-          ssh root@imagen.splashmix.ink "bash /tmp/deploy.sh"
+          DEPLOY
 
       - name: Verify deployment
         run: |
