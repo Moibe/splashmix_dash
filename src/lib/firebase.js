@@ -163,7 +163,11 @@ export async function getCounterFromFirestore(userId) {
 export async function guardarLogGeneracion(user, prompt, seed, proveedor) {
   try {
     const logRef = collection(db, 'log_ig')
-    await addDoc(logRef, {
+    // Timestamp invertido para que los más recientes aparezcan primero
+    const invertedTimestamp = (9999999999999 - Date.now()).toString()
+    const docId = `${invertedTimestamp}_${user.uid.slice(0, 8)}`
+    
+    await setDoc(doc(db, 'log_ig', docId), {
       uid: user.uid,
       displayName: user.displayName || 'Usuario',
       email: user.email,
