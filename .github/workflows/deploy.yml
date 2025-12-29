@@ -31,6 +31,7 @@ jobs:
       - name: Download sensitive files from server
         run: |
           scp root@imagen.splashmix.ink:/root/code/splashmix_dash/src/lib/bridges.js src/lib/
+          scp root@imagen.splashmix.ink:/root/code/splashmix_dash/.env .env
 
       - name: Build project
         run: npm run build
