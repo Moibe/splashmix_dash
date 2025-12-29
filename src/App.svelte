@@ -23,6 +23,13 @@
     textContent = ''
   }
 
+  // Cerrar el modal de login después de unos segundos cuando el usuario se loguea
+  $: if ($user && showLoginPrompt) {
+    setTimeout(() => {
+      showLoginPrompt = false
+    }, 2500)
+  }
+
   function downloadImage() {
     if (!generatedImage) return
     
@@ -489,13 +496,6 @@
         <span>splashmix.ink</span>
         <span>🐙</span>
       </a>
-      <nav>
-        <ul class="nav-links">
-          <li><a href="#faq">Preguntas Frecuentes</a></li>
-          <li><a href="#privacy">Políticas de Privacidad y Reembolso</a></li>
-          <li><a href="#contact">Contactanos</a></li>
-        </ul>
-      </nav>
     </div>
     <div class="header-right">
       <LoginButton />
