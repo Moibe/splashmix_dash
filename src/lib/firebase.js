@@ -138,7 +138,7 @@ export async function registrarNuevoUsuario(user) {
       }
 
       // Captar GA Client ID (inyectado por Tag Manager)
-      const gaClient = window.gaClientID || null
+      const gaClient = window.gaGlobal?.vid || null
       if (gaClient) {
         console.log('📊 GA Client detectado:', gaClient)
       } else {

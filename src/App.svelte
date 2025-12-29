@@ -18,7 +18,7 @@
   const SPACE_URL = 'https://black-forest-labs-flux-2-dev.hf.space'
 
   // Detectar GA Client al cargar la app (con o sin usuario logueado)
-  const gaClient = window.gaClientID || null
+  const gaClient = window.gaGlobal?.vid || null
   if (gaClient) {
     console.log('📊 GA Client detectado:', gaClient)
   } else {
