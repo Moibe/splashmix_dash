@@ -154,6 +154,9 @@
   main {
     font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
     padding: 2rem;
+    background: linear-gradient(135deg, #0052cc 0%, #004999 50%, #003366 100%);
+    min-height: 100vh;
+    color: white;
   }
   
   .header {
@@ -164,7 +167,7 @@
     margin-bottom: 2rem;
   }
   
-  h1 { color: #2563eb; margin: 0; font-size: 2rem; }
+  h1 { color: #ffffff; margin: 0; font-size: 2rem; font-weight: 700; }
   
   .text-area-container {
     margin: 2rem 0;
@@ -177,24 +180,30 @@
     max-width: 600px;
     min-height: 40px;
     padding: 1rem;
-    border: 2px solid #ff3e00;
+    border: 2px solid rgba(255, 255, 255, 0.3);
     border-radius: 8px;
     font-family: system-ui, -apple-system, 'Segoe UI', Roboto;
     font-size: 1rem;
     resize: vertical;
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+  }
+
+  textarea::placeholder {
+    color: rgba(255, 255, 255, 0.7);
   }
   
   textarea:disabled {
-    background-color: #e0e0e0;
-    color: #999;
+    background-color: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.5);
     cursor: not-allowed;
-    border-color: #ccc;
+    border-color: rgba(255, 255, 255, 0.2);
   }
   
   textarea:focus {
     outline: none;
-    border-color: #ff6040;
-    box-shadow: 0 0 0 3px rgba(255, 62, 0, 0.1);
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
   }
   
   textarea:disabled:focus {
@@ -208,28 +217,34 @@
   }
   
   .create-button {
-    background: #2196F3;
+    background: #4A90E2;
     color: white;
-    border: none;
+    border: 2px solid #4A90E2;
     padding: 0.7rem 2rem;
-    border-radius: 4px;
+    border-radius: 6px;
     cursor: pointer;
     font-size: 1rem;
     font-weight: bold;
+    transition: all 0.3s ease;
   }
   
   .create-button:hover {
-    background: #1976D2;
+    background: #357ABD;
+    border-color: #357ABD;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(74, 144, 226, 0.4);
   }
   
   .create-button:disabled {
-    background: #ccc;
-    color: #999;
+    background: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.5);
     cursor: not-allowed;
+    border-color: rgba(255, 255, 255, 0.2);
   }
   
   .create-button:disabled:hover {
-    background: #ccc;
+    background: rgba(255, 255, 255, 0.2);
+    transform: none;
   }
   
   .image-container {
@@ -243,21 +258,21 @@
     width: 100%;
     max-width: 600px;
     padding: 1.5rem;
-    border: 2px dashed #ff3e00;
-    border-radius: 8px;
+    border: 2px dashed rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #f9f9f9;
-    color: #999;
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.6);
     text-align: center;
   }
   
   .image-display img {
     width: 100%;
     height: auto;
-    border-radius: 4px;
-    color: #333;
+    border-radius: 8px;
+    color: white;
   }
 
   .image-wrapper {
@@ -299,10 +314,10 @@
   .error-message {
     margin-top: 1rem;
     padding: 1rem;
-    background: #ffebee;
-    color: #c62828;
-    border: 1px solid #ef5350;
-    border-radius: 4px;
+    background: rgba(220, 38, 38, 0.1);
+    color: #fca5a5;
+    border: 1px solid rgba(220, 38, 38, 0.3);
+    border-radius: 6px;
     text-align: center;
     max-width: 600px;
     margin-left: auto;

@@ -36,8 +36,10 @@
   .auth-container {
     margin: 1rem 0;
     padding: 1rem;
-    background: #f9f9f9;
-    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
   }
 
   .user-info {
@@ -85,31 +87,36 @@
 
   .user-name {
     font-weight: bold;
-    color: #333;
+    color: #ffffff;
   }
 
   .user-email {
     font-size: 0.9rem;
-    color: #666;
+    color: rgba(255, 255, 255, 0.8);
   }
 
   button {
-    background: #ff3e00;
+    background: #4A90E2;
     color: white;
-    border: none;
+    border: 2px solid #4A90E2;
     padding: 0.5rem 1rem;
-    border-radius: 4px;
+    border-radius: 6px;
     cursor: pointer;
     font-size: 1rem;
+    transition: all 0.3s ease;
   }
 
   button:hover {
-    background: #ff6040;
+    background: #357ABD;
+    border-color: #357ABD;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(74, 144, 226, 0.4);
   }
 
   .logout-button {
-    background: #e0e0e0;
-    color: #666;
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    border: 2px solid rgba(255, 255, 255, 0.3);
     padding: 0.4rem 0.8rem;
     font-size: 0.9rem;
     margin: 0;
@@ -117,19 +124,20 @@
   }
 
   .logout-button:hover {
-    background: #d0d0d0;
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
   }
 
   .error {
-    color: #d32f2f;
+    color: #fca5a5;
     margin-top: 0.5rem;
     font-size: 0.9rem;
   }
 
   .google-button {
-    background: white;
-    color: #333;
-    border: 1px solid #ddd;
+    background: #4A90E2;
+    color: #ffffff;
+    border: 2px solid #4A90E2;
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -137,7 +145,8 @@
   }
 
   .google-button:hover {
-    background: #f5f5f5;
+    background: #357ABD;
+    border-color: #357ABD;
   }
 </style>
 
