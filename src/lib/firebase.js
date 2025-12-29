@@ -104,6 +104,18 @@ export async function actualizarCuotaDespuesDeGenerar(proveedor, quotaDisponible
   await updateQuotaForProvider(proveedor, nuevaCuota)
 }
 
+// Función para detectar país por IP
+async function detectCountryByIP() {
+  try {
+    const response = await fetch('https://ipapi.co/json/')
+    const data = await response.json()
+    return data.country_code || null
+  } catch (error) {
+    console.error('❌ Error detectando país por IP:', error)
+    return null
+  }
+}
+
 // Función para registrar nuevo usuario en Firestore
 export async function registrarNuevoUsuario(user) {
   try {
@@ -113,14 +125,28 @@ export async function registrarNuevoUsuario(user) {
     
     // Si NO existe = crear
     if (!docSnap.exists()) {
+      // Detectar país por IP
+      const country_ip = await detectCountryByIP()
+      if (country_ip) {
+        localStorage.setItem('country_ip', country_ip)
+      }
+      
+      // Detectar país por header (misma API, diferente key)
+      const country_header = country_ip // Mismo valor, diferente storage key
+      if (country_header) {
+        localStorage.setItem('country_header', country_header)
+      }
+
       await setDoc(userDocRef, {
         uid: user.uid,
         displayName: user.displayName || 'Usuario',
         email: user.email,
         fecha_registro: new Date().toISOString(),
-        usos: 0  // Inicializar contador de imágenes generadas
+        usos: 0,  // Inicializar contador de imágenes generadas
+        country_ip: country_ip || null,
+        country_header: country_header || null
       })
-      console.log('✅ Nuevo usuario registrado:', user.uid)
+      console.log('✅ Nuevo usuario registrado:', user.uid, '| País:', country_ip)
       return true
     } else {
       console.log('ℹ️  Usuario existente:', user.uid)

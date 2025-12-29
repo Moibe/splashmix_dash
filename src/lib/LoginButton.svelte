@@ -229,7 +229,6 @@
             <div class="avatar-fallback">👤</div>
           {/if}
           <div class="user-details">
-            <div class="user-name">{$user.displayName || 'Usuario'}</div>
             <div class="user-email">{$user.email}</div>
           </div>
         </div>
