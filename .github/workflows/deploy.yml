@@ -38,12 +38,22 @@ jobs:
       - name: Deploy to server
         run: |
           ssh root@imagen.splashmix.ink << 'DEPLOY'
+          set -e
+          echo "📂 Entrando al directorio..."
           cd /root/code/splashmix_dash
+          echo "📥 Haciendo git pull..."
           git pull origin main
+          echo "📦 Instalando dependencias..."
           npm install
+          echo "🗑️ Limpiando dist anterior..."
           rm -rf dist
+          echo "🔨 Construyendo proyecto..."
           npm run build
+          echo "✅ Build completado"
+          ls -la dist/
+          echo "🔄 Reiniciando nginx..."
           systemctl restart nginx
+          echo "🚀 Deploy completado!"
           DEPLOY
 
       - name: Verify deployment
