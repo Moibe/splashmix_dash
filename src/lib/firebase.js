@@ -137,6 +137,9 @@ export async function registrarNuevoUsuario(user) {
         localStorage.setItem('country_header', country_header)
       }
 
+      // Captar GA Client ID (inyectado por Tag Manager)
+      const gaClient = window.gaClientID || null
+
       await setDoc(userDocRef, {
         uid: user.uid,
         displayName: user.displayName || 'Usuario',
@@ -144,9 +147,10 @@ export async function registrarNuevoUsuario(user) {
         fecha_registro: new Date().toISOString(),
         usos: 0,  // Inicializar contador de imágenes generadas
         country_ip: country_ip || null,
-        country_header: country_header || null
+        country_header: country_header || null,
+        gaClient: gaClient
       })
-      console.log('✅ Nuevo usuario registrado:', user.uid, '| País:', country_ip)
+      console.log('✅ Nuevo usuario registrado:', user.uid, '| País:', country_ip, '| GA:', gaClient)
       return true
     } else {
       console.log('ℹ️  Usuario existente:', user.uid)
