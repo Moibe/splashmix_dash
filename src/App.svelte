@@ -13,6 +13,7 @@
   let progressInterval = null
   let selectedProvider = null
   let providerInfo = null
+  let showLoginPrompt = false
   
   const SPACE_URL = 'https://black-forest-labs-flux-2-dev.hf.space'
   
@@ -51,7 +52,7 @@
     }
     
     if (!$user) {
-      error = 'Necesitas iniciar sesión'
+      showLoginPrompt = true
       return
     }
     
@@ -151,6 +152,13 @@
 </script>
 
 <style>
+  :global(html),
+  :global(body) {
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+  }
+
   main {
     font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
     background: linear-gradient(135deg, #0052cc 0%, #004999 50%, #003366 100%);
@@ -158,31 +166,77 @@
     color: white;
     display: flex;
     flex-direction: column;
+    overflow-x: hidden;
   }
   
-  .navbar {
-    background: rgba(0, 0, 0, 0.2);
-    backdrop-filter: blur(10px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 1rem 2rem;
+  .header-top {
+    background: white;
+    border-bottom: 3px solid #2563eb;
+    padding: 0.3rem 2rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    position: sticky;
-    top: 0;
-    z-index: 100;
   }
 
-  .navbar-left {
+  .header-left {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 2rem;
   }
 
-  .navbar-right {
+  .logo {
+    font-weight: bold;
+    color: #333;
+    font-size: 1.1rem;
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.5rem;
+    text-decoration: none;
+    transition: color 0.3s ease;
+  }
+
+  .logo:hover {
+    color: #2563eb;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 2rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .nav-links a {
+    color: #666;
+    text-decoration: none;
+    font-size: 0.95rem;
+    transition: color 0.3s ease;
+  }
+
+  .nav-links a:hover {
+    color: #2563eb;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+  }
+
+  .header-right a {
+    background: #2563eb;
+    color: white;
+    padding: 0.6rem 1.5rem;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.3s ease;
+  }
+
+  .header-right a:hover {
+    background: #1e53a0;
+    transform: translateY(-2px);
   }
   
   .content {
@@ -197,8 +251,6 @@
   .header {
     display: none;
   }
-  
-  h1 { color: #ffffff; margin: 0; font-size: 1.8rem; font-weight: 700; }
   
   .text-area-container {
     margin: 2rem 0;
@@ -279,8 +331,56 @@
     background: rgba(255, 255, 255, 0.2);
     transform: none;
   }
-  
-  .image-container {
+    .login-prompt {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 2rem;
+    border-radius: 16px;
+    box-shadow: 
+      0 0 30px rgba(74, 144, 226, 0.6), 
+      0 0 60px rgba(74, 144, 226, 0.3),
+      0 8px 32px rgba(0, 0, 0, 0.15);
+    z-index: 2000;
+    text-align: center;
+    animation: slideIn 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    min-width: 350px;
+  }
+
+  @keyframes slideIn {
+    from {
+      transform: translate(-50%, -60%);
+      opacity: 0;
+    }
+    to {
+      transform: translate(-50%, -50%);
+      opacity: 1;
+    }
+  }
+
+  .login-prompt-text {
+    color: #333;
+    font-size: 1.1rem;
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+  }
+
+  .login-prompt-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 1999;
+  }
+    .image-container {
     margin-top: 3rem;
     display: flex;
     justify-content: center;
@@ -383,22 +483,32 @@
 </style>
 
 <main>
-  <div class="navbar">
-    <div class="navbar-left">
-      <h1>Splashmix</h1>
+  <div class="header-top">
+    <div class="header-left">
+      <a href="https://splashmix.ink" class="logo">
+        <span>splashmix.ink</span>
+        <span>🐙</span>
+      </a>
+      <nav>
+        <ul class="nav-links">
+          <li><a href="#faq">Preguntas Frecuentes</a></li>
+          <li><a href="#privacy">Políticas de Privacidad y Reembolso</a></li>
+          <li><a href="#contact">Contactanos</a></li>
+        </ul>
+      </nav>
     </div>
-    <div class="navbar-right">
+    <div class="header-right">
       <LoginButton />
     </div>
   </div>
 
   <div class="content">
     <div class="text-area-container">
-      <textarea disabled={!$user} bind:value={textContent} placeholder="Escribe lo que quieres crear aquí, por ejemplo: Un astronauta flotando en el espacio."></textarea>
+      <textarea bind:value={textContent} placeholder="Escribe lo que quieres crear aquí, por ejemplo: Un astronauta flotando en el espacio."></textarea>
     </div>
     
     <div class="button-container">
-      <button class="create-button" disabled={!$user || isLoading} on:click={generateImage}>
+      <button class="create-button" disabled={isLoading} on:click={generateImage}>
         {isLoading ? '⏳ Generando...' : '🖼️ Crear imagen'}
     </button>
   </div>
@@ -411,6 +521,16 @@
   
   {#if error}
     <div class="error-message">{error}</div>
+  {/if}
+
+  {#if showLoginPrompt}
+    <div class="login-prompt-backdrop" on:click={() => showLoginPrompt = false}></div>
+    <div class="login-prompt">
+      <div class="login-prompt-text">
+        Conecta con Google para poder usar gratis la app
+      </div>
+      <LoginButton />
+    </div>
   {/if}
   
   <div class="image-container">
