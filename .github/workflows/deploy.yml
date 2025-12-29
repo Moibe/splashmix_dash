@@ -41,6 +41,7 @@ jobs:
           cd /root/code/splashmix_dash
           git pull origin main
           npm install
+          rm -rf dist
           npm run build
           systemctl restart nginx
           DEPLOY
