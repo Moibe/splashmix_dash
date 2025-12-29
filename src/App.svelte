@@ -191,6 +191,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
+    width: 100%;
   }
   
   .header {
@@ -203,6 +204,7 @@
     margin: 2rem 0;
     display: flex;
     justify-content: center;
+    width: 100%;
   }
   
   textarea {
@@ -244,6 +246,7 @@
     margin: 1.5rem 0;
     display: flex;
     justify-content: center;
+    width: 100%;
   }
   
   .create-button {
@@ -282,6 +285,7 @@
     display: flex;
     justify-content: center;
     min-height: 300px;
+    width: 100%;
   }
   
   .image-display {
