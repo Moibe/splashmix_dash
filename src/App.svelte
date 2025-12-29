@@ -153,21 +153,51 @@
 <style>
   main {
     font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
-    padding: 2rem;
     background: linear-gradient(135deg, #0052cc 0%, #004999 50%, #003366 100%);
     min-height: 100vh;
     color: white;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .navbar {
+    background: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .navbar-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .navbar-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  
+  .content {
+    padding: 2rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
   
   .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 2rem;
-    margin-bottom: 2rem;
+    display: none;
   }
   
-  h1 { color: #ffffff; margin: 0; font-size: 2rem; font-weight: 700; }
+  h1 { color: #ffffff; margin: 0; font-size: 1.8rem; font-weight: 700; }
   
   .text-area-container {
     margin: 2rem 0;
@@ -349,20 +379,23 @@
 </style>
 
 <main>
-  <div class="header">
-    <div>
-      <h1>Splashmix - Generador de Imágenes</h1>
+  <div class="navbar">
+    <div class="navbar-left">
+      <h1>Splashmix</h1>
     </div>
-    <LoginButton />
+    <div class="navbar-right">
+      <LoginButton />
+    </div>
   </div>
-  
-  <div class="text-area-container">
-    <textarea disabled={!$user} bind:value={textContent} placeholder="Escribe lo que quieres crear aquí, por ejemplo: Un astronauta flotando en el espacio."></textarea>
-  </div>
-  
-  <div class="button-container">
-    <button class="create-button" disabled={!$user || isLoading} on:click={generateImage}>
-      {isLoading ? '⏳ Generando...' : '🖼️ Crear imagen'}
+
+  <div class="content">
+    <div class="text-area-container">
+      <textarea disabled={!$user} bind:value={textContent} placeholder="Escribe lo que quieres crear aquí, por ejemplo: Un astronauta flotando en el espacio."></textarea>
+    </div>
+    
+    <div class="button-container">
+      <button class="create-button" disabled={!$user || isLoading} on:click={generateImage}>
+        {isLoading ? '⏳ Generando...' : '🖼️ Crear imagen'}
     </button>
   </div>
   
@@ -389,5 +422,6 @@
         <p>La imagen aparecerá aquí</p>
       {/if}
     </div>
+  </div>
   </div>
 </main>
