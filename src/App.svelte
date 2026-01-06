@@ -14,6 +14,7 @@
   let selectedProvider = null
   let providerInfo = null
   let showLoginPrompt = false
+  let showToast = false
   
   const SPACE_URL = 'https://black-forest-labs-flux-2-dev.hf.space'
 
@@ -72,6 +73,7 @@
     }
     
     isLoading = true
+    showToast = true
     error = null
     progress = 0
     
@@ -172,6 +174,31 @@
     margin: 0;
     padding: 0;
     overflow-x: hidden;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background: white;
+    color: #333;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 999;
+    animation: slideInRight 0.3s ease;
+    font-weight: 500;
+  }
+
+  @keyframes slideInRight {
+    from {
+      transform: translateX(400px);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
   }
 
   main {
@@ -496,6 +523,12 @@
     color: #666;
   }
 </style>
+
+{#if showToast}
+  <div class="toast">
+    ✨ Hola, creando imagen
+  </div>
+{/if}
 
 <main>
   <div class="header-top">
