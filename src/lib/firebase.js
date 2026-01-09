@@ -104,6 +104,14 @@ export async function actualizarCuotaDespuesDeGenerar(proveedor, quotaDisponible
   await updateQuotaForProvider(proveedor, nuevaCuota)
 }
 
+export async function marcarProveedorSinCuota(proveedor) {
+  if (!proveedor || proveedor === 'costo') {
+    return
+  }
+  console.log(`🚫 Marcando proveedor sin cuota: ${proveedor}`)
+  await updateQuotaForProvider(proveedor, 0)
+}
+
 // Función para detectar país por IP
 async function detectCountryByIP() {
   try {

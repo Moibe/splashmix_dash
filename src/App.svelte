@@ -2,7 +2,7 @@
   import LoginButton from './lib/LoginButton.svelte'
   import { user } from './lib/authStore'
   import { Client } from '@gradio/client'
-  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, guardarLogGeneracion, guardarLogError, incrementarUsos } from './lib/firebase'
+  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, guardarLogGeneracion, guardarLogError, incrementarUsos } from './lib/firebase'
   
   let name = 'Svelte Moibe'
   let textContent = ''
@@ -11,12 +11,31 @@
   let error = null
   let progress = 0
   let progressInterval = null
+  let seedInput = ''
+  let randomizeSeed = true
+  let lastSeed = null
+  let showFullImage = false
   let selectedProvider = null
   let providerInfo = null
   let showLoginPrompt = false
   let showToast = false
+  let toastMessage = '✨ Hola, creando imagen'
   
   const SPACE_URL = 'https://black-forest-labs-flux-2-dev.hf.space'
+  const isDev = import.meta.env.DEV
+
+  // Close fullscreen modal via keyboard for accessibility
+  function handleKeydown(event) {
+    if (!showFullImage) return
+    if (event.key === 'Escape') {
+      showFullImage = false
+    }
+  }
+
+  if (!isDev) {
+    randomizeSeed = true
+    seedInput = ''
+  }
 
   // Detectar GA Client al cargar la app (con o sin usuario logueado)
   const gaClient = window.gaGlobal?.vid || null
@@ -37,6 +56,14 @@
     setTimeout(() => {
       showLoginPrompt = false
     }, 2500)
+  }
+  function parseSeed(value) {
+    if (value === '' || value === null || value === undefined) return null
+    const parsed = Number(value)
+    if (Number.isInteger(parsed) && parsed >= 0) {
+      return parsed
+    }
+    return null
   }
 
   function downloadImage() {
@@ -74,6 +101,12 @@
     
     isLoading = true
     showToast = true
+    const hasOpenAI = !!import.meta.env.VITE_OPENAI_API_KEY
+    if (hasOpenAI) {
+      toastMessage = '🔎 Analizando prompt...'
+    } else {
+      toastMessage = '⚠️ Clasificador no disponible, generando imagen'
+    }
     error = null
     progress = 0
     
@@ -85,69 +118,137 @@
     
     try {
       console.log('🎨 Generando imagen con prompt:', textContent)
+
+      // Clasificar el prompt con OpenAI (no bloquea la generación)
+      if (hasOpenAI) {
+        import('./lib/openaiClassifier').then(async (m) => {
+          try {
+            const { classifyPrompt, summarizeLabels } = m
+            const cls = await classifyPrompt(textContent)
+            if (cls.ok) {
+              const summary = summarizeLabels(cls.labels)
+              toastMessage = `🧠 Tipo de prompt: ${summary}`
+              console.log('✅ Clasificación:', cls.labels, '| Razones:', cls.reasons)
+            } else {
+              toastMessage = '⚠️ Clasificador no disponible, generando imagen'
+              console.warn('Clasificación fallida:', cls.error || 'sin detalle')
+            }
+          } catch (e) {
+            toastMessage = '⚠️ Clasificador no disponible, generando imagen'
+            console.warn('Clasificación error:', e?.message)
+          }
+        })
+      } else {
+        console.info('ℹ️ OpenAI no disponible, se omite la clasificación')
+      }
       
-      // Revisar cuotas y seleccionar proveedor
-      providerInfo = await revisorCuotas()
-      selectedProvider = providerInfo.proveedor
-      const hfToken = providerInfo.token
-      
-      console.log(`✅ Proveedor seleccionado: ${providerInfo.proveedor}`)
-      console.log(`📊 Cuota disponible: ${providerInfo.quotaDisponible} segundos`)
-      console.log('🔑 Token:', hfToken ? `✅ Presente (${hfToken.slice(0, 10)}...)` : '❌ No encontrado')
-      
-      // Conectar al Space de Gradio
-      console.log('🔗 Conectando a Space:', SPACE_URL)
-      const client = await Client.connect(SPACE_URL, { token: hfToken })
-      console.log('✅ Conexión exitosa al Space')
-      
-      // Llamar a predict con los parámetros de FLUX.2-dev
-      const result = await client.predict('/infer', {
-        prompt: textContent,
-        input_images: [],
-        seed: 0,
-        randomize_seed: true,
-        width: 1024,
-        height: 1024,
-        num_inference_steps: 30,
-        guidance_scale: 4,
-        prompt_upsampling: true
-      })
-      
-      console.log('📦 Respuesta del Space:', result)
-      
-      // El resultado puede tener diferentes formatos
-      let imageUrl = null
-      let seed = null
-      if (result.data && Array.isArray(result.data)) {
-        // data[0] = imagen, data[1] = seed
-        const imageData = result.data[0]
-        seed = result.data[1]
-        
-        if (imageData && imageData.url) {
-          imageUrl = imageData.url
-        } else if (typeof imageData === 'string' && imageData.startsWith('http')) {
-          imageUrl = imageData
+      // Determinar seed una vez y reutilizar para cada intento
+      let explicitSeed = null
+      if (isDev) {
+        explicitSeed = parseSeed(seedInput)
+        if (explicitSeed === null) {
+          randomizeSeed = true
         }
       }
-      
-      if (!imageUrl) {
-        throw new Error('No se obtuvo URL de imagen del Space')
+      const useRandom = !isDev || randomizeSeed || explicitSeed === null
+      if (isDev && !useRandom && explicitSeed !== null) {
+        console.log('🎯 Seed solicitada:', explicitSeed)
       }
-      
+
+      const maxAttempts = 8
+      let attempts = 0
+      let generationSuccess = false
+      let lastError = null
+      let imageUrl = null
+      let seed = null
+
+      while (attempts < maxAttempts && !generationSuccess) {
+        attempts += 1
+        imageUrl = null
+        seed = null
+        providerInfo = await revisorCuotas()
+        selectedProvider = providerInfo.proveedor
+        const hfToken = providerInfo.token
+
+        console.log(`✅ Proveedor seleccionado: ${providerInfo.proveedor}`)
+        console.log(`📊 Cuota disponible: ${providerInfo.quotaDisponible} segundos`)
+        console.log('🔑 Token:', hfToken ? `✅ Presente (${hfToken.slice(0, 10)}...)` : '❌ No encontrado')
+
+        try {
+          console.log('🔗 Conectando a Space:', SPACE_URL)
+          const client = await Client.connect(SPACE_URL, { token: hfToken })
+          console.log('✅ Conexión exitosa al Space')
+
+          const result = await client.predict('/infer', {
+            prompt: textContent,
+            input_images: [],
+            seed: useRandom ? 0 : explicitSeed,
+            randomize_seed: useRandom,
+            width: 1024,
+            height: 1024,
+            num_inference_steps: 30,
+            guidance_scale: 4,
+            prompt_upsampling: false
+          })
+
+          console.log('📦 Respuesta del Space:', result)
+
+          if (result.data && Array.isArray(result.data)) {
+            const imageData = result.data[0]
+            seed = result.data[1]
+
+            if (imageData && imageData.url) {
+              imageUrl = imageData.url
+            } else if (typeof imageData === 'string' && imageData.startsWith('http')) {
+              imageUrl = imageData
+            }
+          }
+
+          if (!imageUrl) {
+            throw new Error('No se obtuvo URL de imagen del Space')
+          }
+
+          generationSuccess = true
+        } catch (attemptError) {
+          const message = attemptError?.message || ''
+          const quotaExceeded = typeof message === 'string' && message.toLowerCase().includes('pro gpu quota')
+
+          if (quotaExceeded && selectedProvider && selectedProvider !== 'costo') {
+            await marcarProveedorSinCuota(selectedProvider)
+            console.warn(`⚠️ Proveedor sin GPU disponible (${selectedProvider}), reintentando...`)
+            lastError = attemptError
+            imageUrl = null
+            seed = null
+            continue
+          }
+
+          throw attemptError
+        }
+      }
+
+      if (!generationSuccess) {
+        throw lastError || new Error('No fue posible generar la imagen con los proveedores disponibles')
+      }
+
       generatedImage = imageUrl
+      showFullImage = false
       console.log('✅ Imagen generada. URL:', imageUrl)
       console.log('🔑 Seed usado:', seed)
+      lastSeed = seed ?? null
+      if (isDev && !useRandom && explicitSeed !== null && seed !== explicitSeed) {
+        console.warn('⚠️ Seed devuelta difiere de la solicitada:', explicitSeed, '->', seed)
+      }
+      if (isDev && !useRandom && explicitSeed !== null && seed === explicitSeed) {
+        seedInput = explicitSeed.toString()
+      }
       progress = 100
-      
-      // Guardar log de generación (con seed y proveedor)
+
       console.log('📝 Guardando log de generación...')
       await guardarLogGeneracion($user, textContent, seed, providerInfo.proveedor)
-      
-      // Incrementar contador de usos
+
       console.log('📊 Incrementando contador de usos...')
       await incrementarUsos($user)
-      
-      // AHORA actualizar cuota (solo si la imagen se generó exitosamente)
+
       console.log('🔄 Actualizando cuota del proveedor...')
       await actualizarCuotaDespuesDeGenerar(providerInfo.proveedor, providerInfo.quotaDisponible)
       
@@ -155,6 +256,10 @@
       console.error('❌ Error generando imagen:', err)
       error = 'Error al generar la imagen: ' + (err.message || 'Intenta de nuevo')
       generatedImage = null
+      const quotaExceeded = typeof err?.message === 'string' && err.message.toLowerCase().includes('pro gpu quota')
+      if (quotaExceeded && selectedProvider && selectedProvider !== 'costo') {
+        await marcarProveedorSinCuota(selectedProvider)
+      }
       
       // Guardar log de error
       if ($user && selectedProvider) {
@@ -164,6 +269,8 @@
       clearInterval(progressInterval)
       isLoading = false
       progress = 0
+      // Ocultar toast unos segundos después de terminar
+      setTimeout(() => { showToast = false }, 2500)
     }
   }
 </script>
@@ -299,6 +406,63 @@
     display: flex;
     justify-content: center;
     width: 100%;
+  }
+
+  .seed-container {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 1.5rem;
+    width: 100%;
+    max-width: 600px;
+    margin: -0.5rem auto 1rem auto;
+    flex-wrap: wrap;
+  }
+
+  .seed-input {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 220px;
+  }
+
+  .seed-label {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 0.4rem;
+  }
+
+  .seed-input input {
+    padding: 0.7rem 0.9rem;
+    border-radius: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 1rem;
+  }
+
+  .seed-input input:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+  }
+
+  .seed-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: rgba(255, 255, 255, 0.85);
+    cursor: pointer;
+    font-size: 0.95rem;
+  }
+
+  .seed-toggle input {
+    width: 18px;
+    height: 18px;
+  }
+
+  .seed-last {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.75);
   }
   
   textarea {
@@ -456,10 +620,16 @@
     width: 100%;
   }
 
-  .download-btn {
+  .image-actions {
     position: absolute;
     top: 10px;
     right: 10px;
+    display: flex;
+    gap: 8px;
+    z-index: 10;
+  }
+
+  .action-btn {
     background: rgba(0, 0, 0, 0.6);
     border: none;
     border-radius: 50%;
@@ -471,15 +641,15 @@
     font-size: 1.2rem;
     cursor: pointer;
     transition: all 0.2s ease;
-    z-index: 10;
+    color: white;
   }
 
-  .download-btn:hover {
+  .action-btn:hover {
     background: rgba(0, 0, 0, 0.8);
     transform: scale(1.1);
   }
 
-  .download-btn:active {
+  .action-btn:active {
     transform: scale(0.95);
   }
   
@@ -522,12 +692,58 @@
     font-size: 0.9rem;
     color: #666;
   }
+
+  .fullscreen-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 2000;
+  }
+
+  .fullscreen-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    max-width: 90vw;
+    max-height: 90vh;
+    z-index: 2001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .fullscreen-modal img {
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  }
+
+  .close-fullscreen {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(0, 0, 0, 0.7);
+    border: none;
+    border-radius: 999px;
+    width: 40px;
+    height: 40px;
+    color: white;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+
+  .close-fullscreen:hover {
+    background: rgba(0, 0, 0, 0.9);
+  }
 </style>
 
+<svelte:window on:keydown={handleKeydown} />
+
 {#if showToast}
-  <div class="toast">
-    ✨ Hola, creando imagen
-  </div>
+  <div class="toast">{toastMessage}</div>
 {/if}
 
 <main>
@@ -547,6 +763,45 @@
     <div class="text-area-container">
       <textarea bind:value={textContent} placeholder="Escribe lo que quieres crear aquí, por ejemplo: Un astronauta flotando en el espacio."></textarea>
     </div>
+
+    {#if isDev}
+      <div class="seed-container">
+        <div class="seed-input">
+          <label for="seed" class="seed-label">Seed (opcional)</label>
+          <input
+            id="seed"
+            type="number"
+            min="0"
+            step="1"
+            placeholder="Random"
+            bind:value={seedInput}
+            on:input={() => {
+              const parsed = parseSeed(seedInput)
+              if (parsed !== null) {
+                randomizeSeed = false
+              } else if (seedInput === '' || seedInput === null) {
+                randomizeSeed = true
+              }
+            }}
+          />
+        </div>
+        <label class="seed-toggle">
+          <input
+            type="checkbox"
+            bind:checked={randomizeSeed}
+            on:change={() => {
+              if (randomizeSeed) {
+                seedInput = ''
+              }
+            }}
+          />
+          <span>Randomizar seed</span>
+        </label>
+        {#if lastSeed !== null}
+          <div class="seed-last">Última seed: {lastSeed}</div>
+        {/if}
+      </div>
+    {/if}
     
     <div class="button-container">
       <button class="create-button" disabled={isLoading} on:click={generateImage}>
@@ -578,10 +833,15 @@
     <div class="image-display">
       {#if generatedImage}
         <div class="image-wrapper">
-          <img src={generatedImage} alt="Imagen generada" />
-          <button class="download-btn" on:click={downloadImage} title="Descargar imagen">
-            ⬇️
-          </button>
+          <img src={generatedImage} alt="Imagen generada" on:dblclick={() => showFullImage = true} />
+          <div class="image-actions">
+            <button class="action-btn" on:click={() => showFullImage = true} title="Ver en grande" aria-label="Ver imagen en grande">
+              ⤢
+            </button>
+            <button class="action-btn" on:click={downloadImage} title="Descargar imagen" aria-label="Descargar imagen">
+              ⬇️
+            </button>
+          </div>
         </div>
       {:else}
         <p>La imagen aparecerá aquí</p>
@@ -589,4 +849,13 @@
     </div>
   </div>
   </div>
+  {#if showFullImage && generatedImage}
+    <div class="fullscreen-backdrop" on:click={() => showFullImage = false}></div>
+    <div class="fullscreen-modal">
+      <img src={generatedImage} alt="Imagen generada ampliada" on:dblclick={() => showFullImage = false} />
+      <button class="close-fullscreen" on:click={() => showFullImage = false} title="Cerrar" aria-label="Cerrar imagen ampliada">
+        ✕
+      </button>
+    </div>
+  {/if}
 </main>
