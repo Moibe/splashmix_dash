@@ -38,7 +38,7 @@ jobs:
 
       - name: Deploy to server
         run: |
-          scp -r dist/* root@imagen.splashmix.ink:/root/code/splashmix_dash/dist/
+          rsync -av --delete dist/ root@imagen.splashmix.ink:/root/code/splashmix_dash/dist/
 
       - name: Verify deployment
         run: |
