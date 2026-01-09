@@ -211,7 +211,8 @@
           generationSuccess = true
         } catch (attemptError) {
           const message = attemptError?.message || ''
-          const quotaExceeded = typeof message === 'string' && message.toLowerCase().includes('pro gpu quota')
+          const lowered = typeof message === 'string' ? message.toLowerCase() : ''
+          const quotaExceeded = lowered.includes('pro gpu quota') || lowered.includes('free gpu quota')
 
           if (quotaExceeded && selectedProvider && selectedProvider !== 'costo') {
             await marcarProveedorSinCuota(selectedProvider)
@@ -256,7 +257,8 @@
       console.error('❌ Error generando imagen:', err)
       error = 'Error al generar la imagen: ' + (err.message || 'Intenta de nuevo')
       generatedImage = null
-      const quotaExceeded = typeof err?.message === 'string' && err.message.toLowerCase().includes('pro gpu quota')
+      const errLower = typeof err?.message === 'string' ? err.message.toLowerCase() : ''
+      const quotaExceeded = errLower.includes('pro gpu quota') || errLower.includes('free gpu quota')
       if (quotaExceeded && selectedProvider && selectedProvider !== 'costo') {
         await marcarProveedorSinCuota(selectedProvider)
       }
