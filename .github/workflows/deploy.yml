@@ -36,6 +36,10 @@ jobs:
       - name: Build project
         run: npm run build
 
+      - name: Pull latest code on server
+        run: |
+          ssh root@imagen.splashmix.ink "cd /root/code/splashmix_dash && git pull origin main"
+
       - name: Deploy to server
         run: |
           rsync -av --delete dist/ root@imagen.splashmix.ink:/root/code/splashmix_dash/dist/
