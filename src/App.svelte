@@ -2,7 +2,7 @@
   import LoginButton from './lib/LoginButton.svelte'
   import { user } from './lib/authStore'
   import { Client } from '@gradio/client'
-  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, guardarLogGeneracion, guardarLogError, incrementarUsos } from './lib/firebase'
+  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, guardarLogGeneracion, guardarLogError, incrementarUsos, registrarGeneracionEnAPI } from './lib/firebase'
   
   let name = 'Svelte Moibe'
   let textContent = ''
@@ -252,6 +252,10 @@
 
       console.log('🔄 Actualizando cuota del proveedor...')
       await actualizarCuotaDespuesDeGenerar(providerInfo.proveedor, providerInfo.quotaDisponible)
+
+      // Registrar generación en MariaDB
+      console.log('📊 Registrando en MariaDB...')
+      await registrarGeneracionEnAPI($user, textContent, seed, providerInfo.proveedor)
       
     } catch (err) {
       console.error('❌ Error generando imagen:', err)

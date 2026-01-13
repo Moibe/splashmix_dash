@@ -260,3 +260,75 @@ export async function incrementarUsos(user) {
     return false
   }
 }
+
+// Función para registrar generación en MariaDB via FastAPI
+export async function registrarGeneracionEnAPI(user, prompt, seed, proveedor) {
+  try {
+    const apiUrl = import.meta.env.VITE_API_URL
+    if (!apiUrl) {
+      console.warn('⚠️ VITE_API_URL no configurado')
+      return false
+    }
+
+    // Obtener país y usos: primero desde localStorage/Firestore
+    let pais = localStorage.getItem('country_ip')
+    let usos = 1
+    
+    if (!pais) {
+      try {
+        const userDocRef = doc(db, 'usuarios_ig', user.uid)
+        const userDocSnap = await getDoc(userDocRef)
+        if (userDocSnap.exists()) {
+          // Intentar primero country_header, luego country_ip
+          pais = userDocSnap.data().country_header || userDocSnap.data().country_ip || 'Desconocido'
+          // Obtener usos tal cual está en Firestore
+          usos = userDocSnap.data().usos || 1
+        } else {
+          pais = 'Desconocido'
+        }
+      } catch (error) {
+        console.warn('⚠️ No se pudo obtener país y usos de Firestore:', error)
+        pais = 'Desconocido'
+      }
+    } else {
+      // Si el país está en localStorage, igual obtener usos de Firestore
+      try {
+        const userDocRef = doc(db, 'usuarios_ig', user.uid)
+        const userDocSnap = await getDoc(userDocRef)
+        if (userDocSnap.exists()) {
+          usos = userDocSnap.data().usos || 1
+        }
+      } catch (error) {
+        console.warn('⚠️ No se pudo obtener usos de Firestore:', error)
+      }
+    }
+
+    const payload = {
+      uid: user.uid,
+      display_name: user.displayName || 'Usuario',
+      correo: user.email,
+      pais: pais,
+      prompt: prompt,
+      seed: seed,
+      proveedor: proveedor,
+      usos: usos
+    }
+
+    const response = await fetch(`${apiUrl}/registrar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+
+    if (!response.ok) {
+      console.warn(`⚠️ Error registrando en API: ${response.status}`)
+      return false
+    }
+
+    console.log('✅ Generación registrada en MariaDB')
+    return true
+  } catch (error) {
+    console.error('❌ Error registrando en API:', error)
+    return false
+  }
+}
