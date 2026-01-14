@@ -309,9 +309,15 @@ export async function registrarGeneracionEnAPI(user, prompt, seed, proveedor, cl
     if (classification && classification.ok && classification.labels && classification.labels.length > 0) {
       // Orden predefinido para consistencia en búsquedas
       const labelOrder = ['explicit', 'specific_character', 'text_heavy', 'normal']
-      const sortedLabels = classification.labels.sort((a, b) => 
+      let sortedLabels = classification.labels.sort((a, b) => 
         labelOrder.indexOf(a) - labelOrder.indexOf(b)
       )
+      
+      // Si hay múltiples labels y uno es "normal", removerlo (no es necesario acompañado de otros)
+      if (sortedLabels.length > 1) {
+        sortedLabels = sortedLabels.filter(label => label !== 'normal')
+      }
+      
       prompt_type = sortedLabels.join(', ')
       prompt_eval = (classification.reasons && classification.reasons.length > 0) ? classification.reasons[0] : null
     }
