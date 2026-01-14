@@ -15,7 +15,16 @@ export async function classifyPrompt(prompt) {
     return { labels: [], reasons: [], ok: false }
   }
 
-  const instructions = 'You are a strict multi-label classifier. Classify the given image prompt into these categories: text_heavy, normal, specific_character, explicit. Return ONLY json with fields {"labels":[], "reasons":[]}. Multiple labels allowed. Do not include names of any real persons in reasons; be generic like "mentions a specific celebrity".'
+  const instructions = `Eres un clasificador estricto de múltiples etiquetas.
+Clasifica el prompt de imagen dado en estas categorías: text_heavy, normal, specific_character, explicit.
+Te explicaré cada categoría:
+- text_heavy: La imagen está compuesta principalmente por texto, como tipografía o texto de póster.
+- normal: La imagen representa una escena u objeto general sin restricciones específicas.
+- specific_character: La imagen resultante incluiría a un personaje ficticio o real específico. Si menciona el estilo de por ejemplo "Van Gogh", no cuenta como un personaje, porque eso es un estilo. 
+- explicit: La imagen contiene contenido sexual explícito o gráfico para adultos.
+Devuelve SOLO json con campos {"labels":[], "reasons":[]}.
+Se permiten múltiples etiquetas.
+No incluyas nombres de personas reales en las razones; sé genérico como "menciona una celebridad específica".`
 
   const body = {
     model: 'gpt-4.1',

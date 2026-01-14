@@ -262,7 +262,7 @@ export async function incrementarUsos(user) {
 }
 
 // Función para registrar generación en MariaDB via FastAPI
-export async function registrarGeneracionEnAPI(user, prompt, seed, proveedor) {
+export async function registrarGeneracionEnAPI(user, prompt, seed, proveedor, classification) {
   try {
     const apiUrl = import.meta.env.VITE_API_URL
     if (!apiUrl) {
@@ -303,6 +303,14 @@ export async function registrarGeneracionEnAPI(user, prompt, seed, proveedor) {
       }
     }
 
+    // Construir prompt_type y prompt_eval basado en clasificación
+    let prompt_type = null
+    let prompt_eval = null
+    if (classification && classification.ok && classification.labels && classification.labels.length > 0) {
+      prompt_type = classification.labels[0] // Usar la primera etiqueta
+      prompt_eval = (classification.reasons && classification.reasons.length > 0) ? classification.reasons[0] : null
+    }
+
     const payload = {
       uid: user.uid,
       display_name: user.displayName || 'Usuario',
@@ -311,7 +319,9 @@ export async function registrarGeneracionEnAPI(user, prompt, seed, proveedor) {
       prompt: prompt,
       seed: seed,
       proveedor: proveedor,
-      usos: usos
+      usos: usos,
+      prompt_type: prompt_type,
+      prompt_eval: prompt_eval
     }
 
     const response = await fetch(`${apiUrl}/registrar`, {

@@ -20,6 +20,7 @@
   let showLoginPrompt = false
   let showToast = false
   let toastMessage = '✨ Hola, creando imagen'
+  let lastClassification = null // Almacenar clasificación para usar en registro de API
   
   const SPACE_URL = 'https://black-forest-labs-flux-2-dev.hf.space'
   const isDev = import.meta.env.DEV
@@ -126,6 +127,7 @@
             const { classifyPrompt, summarizeLabels } = m
             const cls = await classifyPrompt(textContent)
             if (cls.ok) {
+              lastClassification = cls // Guardar clasificación para usar en registro
               const summary = summarizeLabels(cls.labels)
               toastMessage = `🧠 Tipo de prompt: ${summary}`
               console.log('✅ Clasificación:', cls.labels, '| Razones:', cls.reasons)
@@ -255,7 +257,7 @@
 
       // Registrar generación en MariaDB
       console.log('📊 Registrando en MariaDB...')
-      await registrarGeneracionEnAPI($user, textContent, seed, providerInfo.proveedor)
+      await registrarGeneracionEnAPI($user, textContent, seed, providerInfo.proveedor, lastClassification)
       
     } catch (err) {
       console.error('❌ Error generando imagen:', err)
