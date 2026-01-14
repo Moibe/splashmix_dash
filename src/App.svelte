@@ -147,14 +147,12 @@
       
       // Determinar seed una vez y reutilizar para cada intento
       let explicitSeed = null
-      if (isDev) {
-        explicitSeed = parseSeed(seedInput)
-        if (explicitSeed === null) {
-          randomizeSeed = true
-        }
+      explicitSeed = parseSeed(seedInput)
+      if (explicitSeed === null) {
+        randomizeSeed = true
       }
-      const useRandom = !isDev || randomizeSeed || explicitSeed === null
-      if (isDev && !useRandom && explicitSeed !== null) {
+      const useRandom = randomizeSeed || explicitSeed === null
+      if (!useRandom && explicitSeed !== null) {
         console.log('🎯 Seed solicitada:', explicitSeed)
       }
 
