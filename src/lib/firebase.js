@@ -307,7 +307,12 @@ export async function registrarGeneracionEnAPI(user, prompt, seed, proveedor, cl
     let prompt_type = null
     let prompt_eval = null
     if (classification && classification.ok && classification.labels && classification.labels.length > 0) {
-      prompt_type = classification.labels[0] // Usar la primera etiqueta
+      // Orden predefinido para consistencia en búsquedas
+      const labelOrder = ['explicit', 'specific_character', 'text_heavy', 'normal']
+      const sortedLabels = classification.labels.sort((a, b) => 
+        labelOrder.indexOf(a) - labelOrder.indexOf(b)
+      )
+      prompt_type = sortedLabels.join(', ')
       prompt_eval = (classification.reasons && classification.reasons.length > 0) ? classification.reasons[0] : null
     }
 

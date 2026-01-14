@@ -11,8 +11,8 @@
   let error = null
   let progress = 0
   let progressInterval = null
-  let seedInput = ''
-  let randomizeSeed = true
+  let seedInput = '182'
+  let randomizeSeed = false
   let lastSeed = null
   let showFullImage = false
   let selectedProvider = null
@@ -34,8 +34,9 @@
   }
 
   if (!isDev) {
-    randomizeSeed = true
-    seedInput = ''
+    // En producción, también usar seed 182 por defecto
+    seedInput = '182'
+    randomizeSeed = false
   }
 
   // Detectar GA Client al cargar la app (con o sin usuario logueado)
