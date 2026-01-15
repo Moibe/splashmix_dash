@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { getFirestore, doc, setDoc, getDoc, collection, addDoc, increment } from 'firebase/firestore'
+import { getFirestore, doc, setDoc, getDoc, collection, addDoc, increment, query, where, getDocs } from 'firebase/firestore'
 import { dbQuota } from './firebaseQuota'
 import { tokens, proveedores, process_cost, process_margin, api_cost } from './bridges'
 
@@ -124,11 +124,29 @@ async function detectCountryByIP() {
   }
 }
 
+// Función helper para obtener documento de usuario por su uid (ahora es un campo, no el ID del doc)
+async function getUserDocRefByUid(userUid) {
+  try {
+    const q = query(collection(db, 'usuarios_ig'), where('uid', '==', userUid))
+    const querySnapshot = await getDocs(q)
+    if (!querySnapshot.empty) {
+      return querySnapshot.docs[0].ref
+    }
+    return null
+  } catch (error) {
+    console.error('❌ Error buscando documento de usuario por uid:', error)
+    return null
+  }
+}
+
 // Función para registrar nuevo usuario en Firestore
 export async function registrarNuevoUsuario(user) {
   try {
-    // Usar UID como ID del documento (simple, único y sin duplicados)
-    const userDocRef = doc(db, 'usuarios_ig', user.uid)
+    // Usar timestamp invertido + email como ID del documento (para visualización ordenada)
+    const invertedTimestamp = 9999999999 - Math.floor(Date.now() / 1000)
+    const docId = `${invertedTimestamp}-${user.email}`
+    const userDocRef = doc(db, 'usuarios_ig', docId)
+    
     const docSnap = await getDoc(userDocRef)
     
     // Si NO existe = crear
@@ -154,14 +172,15 @@ export async function registrarNuevoUsuario(user) {
       }
 
       await setDoc(userDocRef, {
-        uid: user.uid,
+        uid: user.uid,  // Guardar uid como campo para búsquedas futuras
         displayName: user.displayName || 'Usuario',
         email: user.email,
         fecha_registro: new Date().toISOString(),
         usos: 0,  // Inicializar contador de imágenes generadas
         country_ip: country_ip || null,
         country_header: country_header || null,
-        gaClient: gaClient
+        gaClient: gaClient,
+        explicit_counter: 0  // Inicializar contador de contenido explícito
       })
       console.log('✅ Nuevo usuario registrado:', user.uid, '| País:', country_ip, '| GA:', gaClient)
       return true
@@ -276,13 +295,17 @@ export async function registrarGeneracionEnAPI(user, prompt, seed, proveedor, cl
     
     if (!pais) {
       try {
-        const userDocRef = doc(db, 'usuarios_ig', user.uid)
-        const userDocSnap = await getDoc(userDocRef)
-        if (userDocSnap.exists()) {
-          // Intentar primero country_header, luego country_ip
-          pais = userDocSnap.data().country_header || userDocSnap.data().country_ip || 'Desconocido'
-          // Obtener usos tal cual está en Firestore
-          usos = userDocSnap.data().usos || 1
+        const userDocRef = await getUserDocRefByUid(user.uid)
+        if (userDocRef) {
+          const userDocSnap = await getDoc(userDocRef)
+          if (userDocSnap.exists()) {
+            // Intentar primero country_header, luego country_ip
+            pais = userDocSnap.data().country_header || userDocSnap.data().country_ip || 'Desconocido'
+            // Obtener usos tal cual está en Firestore
+            usos = userDocSnap.data().usos || 1
+          } else {
+            pais = 'Desconocido'
+          }
         } else {
           pais = 'Desconocido'
         }
@@ -293,10 +316,12 @@ export async function registrarGeneracionEnAPI(user, prompt, seed, proveedor, cl
     } else {
       // Si el país está en localStorage, igual obtener usos de Firestore
       try {
-        const userDocRef = doc(db, 'usuarios_ig', user.uid)
-        const userDocSnap = await getDoc(userDocRef)
-        if (userDocSnap.exists()) {
-          usos = userDocSnap.data().usos || 1
+        const userDocRef = await getUserDocRefByUid(user.uid)
+        if (userDocRef) {
+          const userDocSnap = await getDoc(userDocRef)
+          if (userDocSnap.exists()) {
+            usos = userDocSnap.data().usos || 1
+          }
         }
       } catch (error) {
         console.warn('⚠️ No se pudo obtener usos de Firestore:', error)
@@ -362,7 +387,12 @@ export async function incrementarExplicitCounter(user) {
       return false
     }
 
-    const userDocRef = doc(db, 'usuarios_ig', user.uid)
+    const userDocRef = await getUserDocRefByUid(user.uid)
+    
+    if (!userDocRef) {
+      console.warn('⚠️ No se encontró documento de usuario para:', user.uid)
+      return false
+    }
     
     // Obtener el documento actual
     const userDocSnap = await getDoc(userDocRef)
@@ -395,10 +425,14 @@ export async function registrarErrorEnAPI(user, prompt, errorMessage, proveedor)
     let pais = localStorage.getItem('country_ip')
     if (!pais) {
       try {
-        const userDocRef = doc(db, 'usuarios_ig', user.uid)
-        const userDocSnap = await getDoc(userDocRef)
-        if (userDocSnap.exists()) {
-          pais = userDocSnap.data().country_header || userDocSnap.data().country_ip || 'Desconocido'
+        const userDocRef = await getUserDocRefByUid(user.uid)
+        if (userDocRef) {
+          const userDocSnap = await getDoc(userDocRef)
+          if (userDocSnap.exists()) {
+            pais = userDocSnap.data().country_header || userDocSnap.data().country_ip || 'Desconocido'
+          } else {
+            pais = 'Desconocido'
+          }
         } else {
           pais = 'Desconocido'
         }
