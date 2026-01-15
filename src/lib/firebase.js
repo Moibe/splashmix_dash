@@ -270,7 +270,18 @@ export async function guardarLogError(user, prompt, errorMessage, proveedorInten
 // Función para incrementar el contador de usos (imágenes generadas)
 export async function incrementarUsos(user) {
   try {
-    const userDocRef = doc(db, 'usuarios_ig', user.uid)
+    if (!user || !user.uid) {
+      console.warn('⚠️ Usuario no disponible para incrementar usos')
+      return false
+    }
+
+    const userDocRef = await getUserDocRefByUid(user.uid)
+    
+    if (!userDocRef) {
+      console.warn('⚠️ No se encontró documento de usuario para:', user.uid)
+      return false
+    }
+
     await setDoc(userDocRef, { usos: increment(1) }, { merge: true })
     console.log('✅ Contador de usos incrementado')
     return true
