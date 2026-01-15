@@ -353,3 +353,57 @@ export async function registrarGeneracionEnAPI(user, prompt, seed, proveedor, cl
     return false
   }
 }
+
+// Función para registrar errores en MariaDB via FastAPI
+export async function registrarErrorEnAPI(user, prompt, errorMessage, proveedor) {
+  try {
+    const apiUrl = import.meta.env.VITE_API_URL
+    if (!apiUrl) {
+      console.warn('⚠️ VITE_API_URL no configurado')
+      return false
+    }
+
+    // Obtener país: primero desde localStorage, si no está, desde Firestore
+    let pais = localStorage.getItem('country_ip')
+    if (!pais) {
+      try {
+        const userDocRef = doc(db, 'usuarios_ig', user.uid)
+        const userDocSnap = await getDoc(userDocRef)
+        if (userDocSnap.exists()) {
+          pais = userDocSnap.data().country_header || userDocSnap.data().country_ip || 'Desconocido'
+        } else {
+          pais = 'Desconocido'
+        }
+      } catch (error) {
+        console.warn('⚠️ No se pudo obtener país de Firestore:', error)
+        pais = 'Desconocido'
+      }
+    }
+
+    const payload = {
+      uid: user.uid,
+      display_name: user.displayName || 'Usuario',
+      correo: user.email,
+      pais: pais,
+      prompt: `error: ${errorMessage}`,
+      proveedor: proveedor
+    }
+
+    const response = await fetch(`${apiUrl}/registrar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+
+    if (!response.ok) {
+      console.warn(`⚠️ Error registrando error en API: ${response.status}`)
+      return false
+    }
+
+    console.log('✅ Error registrado en MariaDB')
+    return true
+  } catch (error) {
+    console.error('❌ Error registrando error en API:', error)
+    return false
+  }
+}

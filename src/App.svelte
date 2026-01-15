@@ -2,7 +2,7 @@
   import LoginButton from './lib/LoginButton.svelte'
   import { user } from './lib/authStore'
   import { Client } from '@gradio/client'
-  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, guardarLogGeneracion, guardarLogError, incrementarUsos, registrarGeneracionEnAPI } from './lib/firebase'
+  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, guardarLogGeneracion, guardarLogError, incrementarUsos, registrarGeneracionEnAPI, registrarErrorEnAPI } from './lib/firebase'
   
   let name = 'Svelte Moibe'
   let textContent = ''
@@ -121,6 +121,9 @@
     try {
       console.log('🎨 Generando imagen con prompt:', textContent)
 
+      // Limpiar prompt: remover saltos de línea y espacios extra
+      const cleanedPrompt = textContent.replace(/\n/g, ' ').trim()
+
       // Clasificar el prompt con OpenAI (no bloquea la generación)
       if (hasOpenAI) {
         import('./lib/openaiClassifier').then(async (m) => {
@@ -181,7 +184,7 @@
           console.log('✅ Conexión exitosa al Space')
 
           const result = await client.predict('/infer', {
-            prompt: textContent,
+            prompt: cleanedPrompt,
             input_images: [],
             seed: useRandom ? 0 : explicitSeed,
             randomize_seed: useRandom,
@@ -246,7 +249,7 @@
       progress = 100
 
       console.log('📝 Guardando log de generación...')
-      await guardarLogGeneracion($user, textContent, seed, providerInfo.proveedor)
+      await guardarLogGeneracion($user, cleanedPrompt, seed, providerInfo.proveedor)
 
       console.log('📊 Incrementando contador de usos...')
       await incrementarUsos($user)
@@ -256,7 +259,7 @@
 
       // Registrar generación en MariaDB
       console.log('📊 Registrando en MariaDB...')
-      await registrarGeneracionEnAPI($user, textContent, seed, providerInfo.proveedor, lastClassification)
+      await registrarGeneracionEnAPI($user, cleanedPrompt, seed, providerInfo.proveedor, lastClassification)
       
     } catch (err) {
       console.error('❌ Error generando imagen:', err)
@@ -268,9 +271,14 @@
         await marcarProveedorSinCuota(selectedProvider)
       }
       
-      // Guardar log de error
+      // Guardar log de error en Firestore
       if ($user && selectedProvider) {
-        await guardarLogError($user, textContent, err.message, selectedProvider)
+        await guardarLogError($user, cleanedPrompt, err.message, selectedProvider)
+      }
+
+      // Registrar error en MariaDB
+      if ($user && selectedProvider) {
+        await registrarErrorEnAPI($user, cleanedPrompt, err.message, selectedProvider)
       }
     } finally {
       clearInterval(progressInterval)
@@ -475,7 +483,7 @@
   textarea {
     width: 100%;
     max-width: 600px;
-    min-height: 40px;
+    min-height: 20px;
     padding: 1rem;
     border: 2px solid rgba(255, 255, 255, 0.3);
     border-radius: 8px;
@@ -768,7 +776,7 @@
 
   <div class="content">
     <div class="text-area-container">
-      <textarea bind:value={textContent} placeholder="Escribe lo que quieres crear aquí, por ejemplo: Un astronauta flotando en el espacio."></textarea>
+      <textarea maxlength="1000" bind:value={textContent} placeholder="Escribe lo que quieres crear aquí, por ejemplo: Un astronauta flotando en el espacio."></textarea>
     </div>
 
     {#if isDev}
