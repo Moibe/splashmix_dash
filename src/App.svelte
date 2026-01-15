@@ -2,7 +2,7 @@
   import LoginButton from './lib/LoginButton.svelte'
   import { user } from './lib/authStore'
   import { Client } from '@gradio/client'
-  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, guardarLogGeneracion, guardarLogError, incrementarUsos, registrarGeneracionEnAPI, registrarErrorEnAPI } from './lib/firebase'
+  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter } from './lib/firebase'
   
   let name = 'Svelte Moibe'
   let textContent = ''
@@ -248,14 +248,19 @@
       }
       progress = 100
 
-      console.log('📝 Guardando log de generación...')
-      await guardarLogGeneracion($user, cleanedPrompt, seed, providerInfo.proveedor)
+      console.log('📝 Logs archivados en MariaDB...')
 
       console.log('📊 Incrementando contador de usos...')
       await incrementarUsos($user)
 
       console.log('🔄 Actualizando cuota del proveedor...')
       await actualizarCuotaDespuesDeGenerar(providerInfo.proveedor, providerInfo.quotaDisponible)
+
+      // Verificar si la clasificación incluye "explicit" e incrementar contador
+      if (lastClassification && lastClassification.ok && lastClassification.labels && lastClassification.labels.includes('explicit')) {
+        console.log('⚠️ Prompt explícito detectado, incrementando contador...')
+        await incrementarExplicitCounter($user)
+      }
 
       // Registrar generación en MariaDB
       console.log('📊 Registrando en MariaDB...')
@@ -271,12 +276,7 @@
         await marcarProveedorSinCuota(selectedProvider)
       }
       
-      // Guardar log de error en Firestore
-      if ($user && selectedProvider) {
-        await guardarLogError($user, cleanedPrompt, err.message, selectedProvider)
-      }
-
-      // Registrar error en MariaDB
+      // Guardar log de error en MariaDB
       if ($user && selectedProvider) {
         await registrarErrorEnAPI($user, cleanedPrompt, err.message, selectedProvider)
       }
@@ -490,6 +490,7 @@
     font-family: system-ui, -apple-system, 'Segoe UI', Roboto;
     font-size: 1rem;
     resize: vertical;
+    overflow-y: auto;
     background-color: rgba(255, 255, 255, 0.1);
     color: white;
   }

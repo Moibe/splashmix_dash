@@ -304,7 +304,7 @@ export async function registrarGeneracionEnAPI(user, prompt, seed, proveedor, cl
     }
 
     // Construir prompt_type y prompt_eval basado en clasificación
-    let prompt_type = null
+    let prompt_type = 'clasificador inactivo'
     let prompt_eval = null
     if (classification && classification.ok && classification.labels && classification.labels.length > 0) {
       // Orden predefinido para consistencia en búsquedas
@@ -354,7 +354,35 @@ export async function registrarGeneracionEnAPI(user, prompt, seed, proveedor, cl
   }
 }
 
-// Función para registrar errores en MariaDB via FastAPI
+// Función para incrementar contador de prompts explícitos
+export async function incrementarExplicitCounter(user) {
+  try {
+    if (!user || !user.uid) {
+      console.warn('⚠️ Usuario no disponible para incrementar explicit_counter')
+      return false
+    }
+
+    const userDocRef = doc(db, 'usuarios_ig', user.uid)
+    
+    // Obtener el documento actual
+    const userDocSnap = await getDoc(userDocRef)
+    
+    if (userDocSnap.exists()) {
+      // Si existe, incrementar el contador
+      const currentCount = userDocSnap.data().explicit_counter || 0
+      await setDoc(userDocRef, { explicit_counter: currentCount + 1 }, { merge: true })
+    } else {
+      // Si no existe el documento, crearlo con explicit_counter = 1
+      await setDoc(userDocRef, { explicit_counter: 1 }, { merge: true })
+    }
+
+    console.log('📊 Contador explícito incrementado')
+    return true
+  } catch (error) {
+    console.error('❌ Error incrementando explicit_counter:', error)
+    return false
+  }
+}
 export async function registrarErrorEnAPI(user, prompt, errorMessage, proveedor) {
   try {
     const apiUrl = import.meta.env.VITE_API_URL
