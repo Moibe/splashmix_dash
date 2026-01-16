@@ -142,52 +142,52 @@ async function getUserDocRefByUid(userUid) {
 // Función para registrar nuevo usuario en Firestore
 export async function registrarNuevoUsuario(user) {
   try {
-    // Usar timestamp invertido + email como ID del documento (para visualización ordenada)
+    // Primero buscar si ya existe un documento con este uid
+    const existingDocRef = await getUserDocRefByUid(user.uid)
+    
+    if (existingDocRef) {
+      console.log('ℹ️  Usuario existente:', user.uid)
+      return false
+    }
+    
+    // Si no existe, crear uno nuevo con ID timestamp-email
     const invertedTimestamp = 9999999999 - Math.floor(Date.now() / 1000)
     const docId = `${invertedTimestamp}-${user.email}`
     const userDocRef = doc(db, 'usuarios_ig', docId)
     
-    const docSnap = await getDoc(userDocRef)
-    
-    // Si NO existe = crear
-    if (!docSnap.exists()) {
-      // Detectar país por IP
-      const country_ip = await detectCountryByIP()
-      if (country_ip) {
-        localStorage.setItem('country_ip', country_ip)
-      }
-      
-      // Detectar país por header (misma API, diferente key)
-      const country_header = country_ip // Mismo valor, diferente storage key
-      if (country_header) {
-        localStorage.setItem('country_header', country_header)
-      }
-
-      // Captar GA Client ID (inyectado por Tag Manager)
-      const gaClient = window.gaGlobal?.vid || null
-      if (gaClient) {
-        console.log('📊 GA Client detectado:', gaClient)
-      } else {
-        console.warn('⚠️ GA Client NO detectado')
-      }
-
-      await setDoc(userDocRef, {
-        uid: user.uid,  // Guardar uid como campo para búsquedas futuras
-        displayName: user.displayName || 'Usuario',
-        email: user.email,
-        fecha_registro: new Date().toISOString(),
-        usos: 0,  // Inicializar contador de imágenes generadas
-        country_ip: country_ip || null,
-        country_header: country_header || null,
-        gaClient: gaClient,
-        explicit_counter: 0  // Inicializar contador de contenido explícito
-      })
-      console.log('✅ Nuevo usuario registrado:', user.uid, '| País:', country_ip, '| GA:', gaClient)
-      return true
-    } else {
-      console.log('ℹ️  Usuario existente:', user.uid)
-      return false
+    // Detectar país por IP
+    const country_ip = await detectCountryByIP()
+    if (country_ip) {
+      localStorage.setItem('country_ip', country_ip)
     }
+    
+    // Detectar país por header (misma API, diferente key)
+    const country_header = country_ip // Mismo valor, diferente storage key
+    if (country_header) {
+      localStorage.setItem('country_header', country_header)
+    }
+
+    // Captar GA Client ID (inyectado por Tag Manager)
+    const gaClient = window.gaGlobal?.vid || null
+    if (gaClient) {
+      console.log('📊 GA Client detectado:', gaClient)
+    } else {
+      console.warn('⚠️ GA Client NO detectado')
+    }
+
+    await setDoc(userDocRef, {
+      uid: user.uid,  // Guardar uid como campo para búsquedas futuras
+      displayName: user.displayName || 'Usuario',
+      email: user.email,
+      fecha_registro: new Date().toISOString(),
+      usos: 0,  // Inicializar contador de imágenes generadas
+      country_ip: country_ip || null,
+      country_header: country_header || null,
+      gaClient: gaClient,
+      explicit_counter: 0  // Inicializar contador de contenido explícito
+    })
+    console.log('✅ Nuevo usuario registrado:', user.uid, '| País:', country_ip, '| GA:', gaClient)
+    return true
   } catch (error) {
     console.error('❌ Error registrando usuario:', error)
     return false
