@@ -125,7 +125,7 @@ async function detectCountryByIP() {
 }
 
 // Función helper para obtener documento de usuario por su uid (ahora es un campo, no el ID del doc)
-async function getUserDocRefByUid(userUid) {
+export async function getUserDocRefByUid(userUid) {
   try {
     const q = query(collection(db, 'usuarios_ig'), where('uid', '==', userUid))
     const querySnapshot = await getDocs(q)

@@ -2,7 +2,8 @@
   import LoginButton from './lib/LoginButton.svelte'
   import { user } from './lib/authStore'
   import { Client } from '@gradio/client'
-  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter } from './lib/firebase'
+  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, getUserDocRefByUid } from './lib/firebase'
+  import { getDoc } from 'firebase/firestore'
   
   let name = 'Svelte Moibe'
   let textContent = ''
@@ -260,6 +261,24 @@
       if (lastClassification && lastClassification.ok && lastClassification.labels && lastClassification.labels.includes('explicit')) {
         console.log('⚠️ Prompt explícito detectado, incrementando contador...')
         await incrementarExplicitCounter($user)
+        
+        // Verificar si explicit_counter > 3 para mostrar advertencia
+        try {
+          const userDocRef = await getUserDocRefByUid($user.uid)
+          if (userDocRef) {
+            const userDocSnap = await getDoc(userDocRef)
+            if (userDocSnap.exists()) {
+              const explicitCount = userDocSnap.data().explicit_counter || 0
+              if (explicitCount > 3) {
+                toastMessage = '⚠️ Explicit Counter > 3'
+                showToast = true
+                setTimeout(() => { showToast = false }, 3000)
+              }
+            }
+          }
+        } catch (error) {
+          console.warn('⚠️ Error verificando explicit_counter:', error)
+        }
       }
 
       // Registrar generación en MariaDB
