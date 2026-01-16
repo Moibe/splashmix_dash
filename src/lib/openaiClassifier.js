@@ -20,7 +20,7 @@ Clasifica el prompt de imagen dado en estas categorías: text_heavy, normal, spe
 Te explicaré cada categoría:
 - text_heavy: La imagen está compuesta principalmente por texto, como tipografía o texto de póster.
 - normal: La imagen representa una escena u objeto general sin restricciones específicas.
-- specific_character: La imagen resultante incluiría a un personaje ficticio o real específico. Si menciona el estilo de por ejemplo "Van Gogh", no cuenta como un personaje, porque eso es un estilo. 
+- specific_character: La imagen resultante incluiría a un personaje ficticio o real específico (o sea con nombre propio y famoso). Si menciona el estilo de por ejemplo "Van Gogh", no cuenta como un personaje, porque eso es un estilo. 
 Si es un tipo de personaje por ejemplo: "un sucubo" o "un vampiro" pero sin especificar alguien exacto, entonces no entra en ésta clasificación
 - explicit: La imagen contiene contenido sexual explícito o gráfico para adultos.
 Devuelve SOLO json con campos {"labels":[], "reasons":[]}.
