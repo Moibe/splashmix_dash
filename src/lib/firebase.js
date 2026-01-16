@@ -124,14 +124,99 @@ async function detectCountryByIP() {
   }
 }
 
+// Función para actualizar ritmo en documento del usuario
+export async function actualizarRitmo(user) {
+  try {
+    if (!user || !user.uid) {
+      console.warn('⚠️ Usuario no disponible para actualizar ritmo')
+      return false
+    }
+
+    const userDocRef = await getUserDocRefByUid(user.uid)
+    
+    if (!userDocRef) {
+      console.warn('⚠️ No se encontró documento de usuario para:', user.uid)
+      return false
+    }
+    
+    const userDocSnap = await getDoc(userDocRef)
+    
+    if (userDocSnap.exists()) {
+      const userData = userDocSnap.data()
+      const usos = userData.usos || 0
+      const fechaRegistro = userData.fecha_registro
+      const ritmo = calcularRitmo(usos, fechaRegistro)
+      
+      await setDoc(userDocRef, { ritmo: ritmo }, { merge: true })
+      console.log(`📊 Ritmo actualizado en Firestore: ${ritmo}`)
+      return true
+    } else {
+      console.warn('⚠️ Documento de usuario no existe')
+      return false
+    }
+  } catch (error) {
+    console.error('❌ Error actualizando ritmo:', error)
+    return false
+  }
+}
+export function calcularRitmo(usos, fechaRegistro) {
+  try {
+    if (!usos || usos === 0) {
+      console.warn('⚠️ Usos no disponibles para calcular ritmo')
+      return 0
+    }
+    
+    if (!fechaRegistro) {
+      console.warn('⚠️ fecha_registro no disponible para calcular ritmo')
+      return 0
+    }
+    
+    const fecha = new Date(fechaRegistro)
+    if (isNaN(fecha.getTime())) {
+      console.warn('⚠️ fecha_registro inválida:', fechaRegistro)
+      return 0
+    }
+    
+    const ahora = new Date()
+    const diferenciaMs = ahora - fecha
+    const diasTranscurridos = diferenciaMs / (1000 * 60 * 60 * 24)
+    const diasRedondeados = Math.round(diasTranscurridos)
+    const ritmo = usos / diasTranscurridos
+    
+    // Logs desglosados paso a paso
+    console.log('📅 Fecha de registro:', fecha.toISOString())
+    console.log('📅 Fecha actual:', ahora.toISOString())
+    console.log('📅 Diferencia en ms:', diferenciaMs)
+    console.log(`📅 Días transcurridos: ${diasRedondeados} ${diasRedondeados === 1 ? 'día' : 'días'}`)
+    console.log(`📊 Cálculo: ${usos} ÷ ${diasTranscurridos.toFixed(4)} = ${ritmo.toFixed(4)}`)
+    
+    // Evitar división por cero si es el primer día
+    if (diasTranscurridos < 1) return parseFloat(usos)
+    
+    return parseFloat(ritmo.toFixed(2))
+  } catch (error) {
+    console.error('❌ Error calculando ritmo:', error)
+    return 0
+  }
+}
+
 // Función helper para obtener documento de usuario por su uid (ahora es un campo, no el ID del doc)
 export async function getUserDocRefByUid(userUid) {
   try {
+    // Primero intenta buscar por campo uid (usuarios nuevos)
     const q = query(collection(db, 'usuarios_ig'), where('uid', '==', userUid))
     const querySnapshot = await getDocs(q)
     if (!querySnapshot.empty) {
       return querySnapshot.docs[0].ref
     }
+    
+    // Si no encuentra, intenta buscar por ID del documento (usuarios viejos)
+    const oldDocRef = doc(db, 'usuarios_ig', userUid)
+    const oldDocSnap = await getDoc(oldDocRef)
+    if (oldDocSnap.exists()) {
+      return oldDocRef
+    }
+    
     return null
   } catch (error) {
     console.error('❌ Error buscando documento de usuario por uid:', error)
@@ -303,6 +388,8 @@ export async function registrarGeneracionEnAPI(user, prompt, seed, proveedor, cl
     // Obtener país y usos: primero desde localStorage/Firestore
     let pais = localStorage.getItem('country_ip')
     let usos = 1
+    let ritmo = 0
+    let fechaRegistro = null
     
     if (!pais) {
       try {
@@ -310,10 +397,16 @@ export async function registrarGeneracionEnAPI(user, prompt, seed, proveedor, cl
         if (userDocRef) {
           const userDocSnap = await getDoc(userDocRef)
           if (userDocSnap.exists()) {
+            const userData = userDocSnap.data()
+            console.log('👤 Datos del usuario:', userData)
             // Intentar primero country_header, luego country_ip
-            pais = userDocSnap.data().country_header || userDocSnap.data().country_ip || 'Desconocido'
+            pais = userData.country_header || userData.country_ip || 'Desconocido'
             // Obtener usos tal cual está en Firestore
-            usos = userDocSnap.data().usos || 1
+            usos = userData.usos || 1
+            // Obtener fecha_registro para calcular ritmo
+            fechaRegistro = userData.fecha_registro
+            ritmo = calcularRitmo(usos, fechaRegistro)
+            console.log(`📊 Ritmo calculado: ${ritmo}`)
           } else {
             pais = 'Desconocido'
           }
@@ -331,7 +424,12 @@ export async function registrarGeneracionEnAPI(user, prompt, seed, proveedor, cl
         if (userDocRef) {
           const userDocSnap = await getDoc(userDocRef)
           if (userDocSnap.exists()) {
-            usos = userDocSnap.data().usos || 1
+            const userData = userDocSnap.data()
+            console.log('👤 Datos del usuario:', userData)
+            usos = userData.usos || 1
+            fechaRegistro = userData.fecha_registro
+            ritmo = calcularRitmo(usos, fechaRegistro)
+            console.log(`📊 Ritmo calculado: ${ritmo}`)
           }
         }
       } catch (error) {
@@ -367,6 +465,7 @@ export async function registrarGeneracionEnAPI(user, prompt, seed, proveedor, cl
       seed: seed,
       proveedor: proveedor,
       usos: usos,
+      ritmo: ritmo,
       prompt_type: prompt_type,
       prompt_eval: prompt_eval
     }
