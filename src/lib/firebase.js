@@ -159,6 +159,31 @@ export async function actualizarRitmo(user) {
     return false
   }
 }
+
+export async function actualizarUltimoUso(user) {
+  try {
+    if (!user || !user.uid) {
+      console.warn('⚠️ Usuario no disponible para actualizar último uso')
+      return false
+    }
+
+    const userDocRef = await getUserDocRefByUid(user.uid)
+    
+    if (!userDocRef) {
+      console.warn('⚠️ No se encontró documento de usuario para:', user.uid)
+      return false
+    }
+    
+    const ahora = new Date().toISOString()
+    await setDoc(userDocRef, { ultimo_uso: ahora }, { merge: true })
+    console.log(`⏰ Último uso actualizado en Firestore: ${ahora}`)
+    return true
+  } catch (error) {
+    console.error('❌ Error actualizando último uso:', error)
+    return false
+  }
+}
+
 export function calcularRitmo(usos, fechaRegistro) {
   try {
     if (!usos || usos === 0) {

@@ -2,7 +2,7 @@
   import LoginButton from './lib/LoginButton.svelte'
   import { user } from './lib/authStore'
   import { Client } from '@gradio/client'
-  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, getUserDocRefByUid, actualizarRitmo } from './lib/firebase'
+  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, getUserDocRefByUid, actualizarRitmo, actualizarUltimoUso } from './lib/firebase'
   import { getDoc } from 'firebase/firestore'
   
   let name = 'Svelte Moibe'
@@ -259,6 +259,9 @@
 
       console.log('📊 Actualizando ritmo en Firestore...')
       await actualizarRitmo($user)
+
+      console.log('⏰ Actualizando último uso...')
+      await actualizarUltimoUso($user)
 
       // Verificar si la clasificación incluye "explicit" e incrementar contador
       if (lastClassification && lastClassification.ok && lastClassification.labels && lastClassification.labels.includes('explicit')) {
