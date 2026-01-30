@@ -1,0 +1,42 @@
+{
+  "common": {
+    "language": "Español"
+  },
+  "buttons": {
+    "create": "🖼️ Crear imagen",
+    "generating": "⏳ Generando...",
+    "download": "Descargar imagen",
+    "viewFullSize": "Ver en grande"
+  },
+  "placeholders": {
+    "prompt": "Escribe lo que quieres crear aquí, por ejemplo: Un astronauta flotando en el espacio."
+  },
+  "messages": {
+    "writeFirst": "Por favor escribe algo primero",
+    "analyzing": "🔎 Analizando prompt...",
+    "classifierUnavailable": "⚠️ Clasificador no disponible, generando imagen",
+    "errorGenerating": "Error al generar la imagen: ",
+    "tryAgain": "Intenta de nuevo",
+    "imageAppears": "La imagen aparecerá aquí"
+  },
+  "rating": {
+    "title": "¿Qué te pareció la imagen?",
+    "stars": "{count} estrellas"
+  },
+  "advice": {
+    "tip1": "Puedes mejorar tus imágenes agregando un estilo a tu texto, por ejemplo \"una imagen estilo anime\" o \"un cuadro estilo impresionista\".",
+    "tip2": "Los detalles importan: intenta ser específico en tu descripción, menciona colores, texturas, iluminación y composición para obtener mejores resultados.",
+    "tip3": "Usa referencias visuales en tu descripción: menciona artistas, películas o pinturas famosas para guiar el resultado hacia un estilo visual específico.",
+    "tip4": "Experimenta con diferentes palabras clave: términos como \"cinematográfico\", \"hiperrealista\", \"acuarela\" o \"digital art\" pueden transformar completamente el resultado.",
+    "tip5": "Describe la atmósfera y emoción que deseas: agregar palabras como \"dramático\", \"sereno\", \"nostálgico\" o \"vibrante\" ayuda a capturar el sentimiento correcto.",
+    "tip6": "Prueba variaciones de tu prompt: pequeños cambios en el orden de las palabras o sinónimos pueden producir resultados inesperadamente distintos.",
+    "tip7": "Combina técnicas y estilos: \"un retrato estilo Caravaggio con elementos surrealistas\" o \"un paisaje digital art con iluminación neon\" crea composiciones únicas e interesantes."
+  },
+  "login": {
+    "prompt": "Conecta con Google para poder usar gratis la app"
+  },
+  "seed": {
+    "label": "Seed (Avanzado):",
+    "random": "Aleatorio"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "common": {
+    "language": "English"
+  },
+  "buttons": {
+    "create": "🖼️ Create image",
+    "generating": "⏳ Generating...",
+    "download": "Download image",
+    "viewFullSize": "View full size"
+  },
+  "placeholders": {
+    "prompt": "Write what you want to create here, for example: An astronaut floating in space."
+  },
+  "messages": {
+    "writeFirst": "Please write something first",
+    "analyzing": "🔎 Analyzing prompt...",
+    "classifierUnavailable": "⚠️ Classifier unavailable, generating image",
+    "errorGenerating": "Error generating image: ",
+    "tryAgain": "Try again",
+    "imageAppears": "The image will appear here"
+  },
+  "rating": {
+    "title": "How did you like the image?",
+    "stars": "{count} stars"
+  },
+  "advice": {
+    "tip1": "You can improve your images by adding a style to your text, for example \"an image in anime style\" or \"a painting in impressionist style\".",
+    "tip2": "Details matter: try to be specific in your description, mention colors, textures, lighting and composition to get better results.",
+    "tip3": "Use visual references in your description: mention famous artists, movies, or paintings to guide the result towards a specific visual style.",
+    "tip4": "Experiment with different keywords: terms like \"cinematic\", \"hyperrealistic\", \"watercolor\" or \"digital art\" can completely transform the result.",
+    "tip5": "Describe the atmosphere and emotion you want: adding words like \"dramatic\", \"serene\", \"nostalgic\" or \"vibrant\" helps capture the right feeling.",
+    "tip6": "Try variations of your prompt: small changes in word order or synonyms can produce unexpectedly different results.",
+    "tip7": "Combine techniques and styles: \"a portrait in Caravaggio style with surrealist elements\" or \"a digital art landscape with neon lighting\" creates unique and interesting compositions."
+  },
+  "login": {
+    "prompt": "Connect with Google to use the app for free"
+  },
+  "seed": {
+    "label": "Seed (Advanced):",
+    "random": "Random"
+  }
+}

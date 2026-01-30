@@ -402,9 +402,11 @@ export async function incrementarUsos(user) {
 }
 
 // Función para registrar generación en MariaDB via FastAPI
-export async function registrarGeneracionEnAPI(user, prompt, seed, proveedor, classification) {
+export async function registrarGeneracionEnAPI(user, prompt, seed, proveedor, classification, estilos = [], estadoCaravaggio = 'sin estilo agregado') {
   try {
     const apiUrl = import.meta.env.VITE_API_URL
+    console.log('🎨 registrarGeneracionEnAPI recibió estilos:', estilos)
+    console.log('🎨 registrarGeneracionEnAPI recibió estadoCaravaggio:', estadoCaravaggio)
     if (!apiUrl) {
       console.warn('⚠️ VITE_API_URL no configurado')
       return false
@@ -492,8 +494,12 @@ export async function registrarGeneracionEnAPI(user, prompt, seed, proveedor, cl
       usos: usos,
       ritmo: ritmo,
       prompt_type: prompt_type,
-      prompt_eval: prompt_eval
+      prompt_eval: prompt_eval,
+      estilo: (Array.isArray(estilos) && estilos.length > 0) ? estilos.join(', ') : null,
+      estilo_agregado: estadoCaravaggio
     }
+
+    console.log('📤 Payload a enviar:', payload)
 
     const response = await fetch(`${apiUrl}/registrar`, {
       method: 'POST',
@@ -503,14 +509,18 @@ export async function registrarGeneracionEnAPI(user, prompt, seed, proveedor, cl
 
     if (!response.ok) {
       console.warn(`⚠️ Error registrando en API: ${response.status}`)
-      return false
+      return { ok: false, id: null }
     }
 
+    const data = await response.json()
     console.log('✅ Generación registrada en MariaDB')
-    return true
+    console.log('📝 Respuesta completa:', data)
+    const registroId = data.data?.id
+    console.log('📝 ID extraído:', registroId)
+    return { ok: true, id: registroId }
   } catch (error) {
     console.error('❌ Error registrando en API:', error)
-    return false
+    return { ok: false, id: null }
   }
 }
 
@@ -601,6 +611,48 @@ export async function registrarErrorEnAPI(user, prompt, errorMessage, proveedor)
     return true
   } catch (error) {
     console.error('❌ Error registrando error en API:', error)
+    return false
+  }
+}
+
+// Función para guardar calificación de imagen en MariaDB
+export async function guardarCalificacion(user, id, calificacionNumerica) {
+  try {
+    const apiUrl = import.meta.env.VITE_API_URL
+    if (!apiUrl) {
+      console.warn('⚠️ VITE_API_URL no configurado')
+      return false
+    }
+
+    if (!id) {
+      console.error('❌ Error: ID de registro es null o undefined')
+      return false
+    }
+
+    const payload = {
+      id: id,
+      calificacion: calificacionNumerica
+    }
+
+    console.log('⭐ Guardando calificación:', payload)
+
+    const response = await fetch(`${apiUrl}/guardar-calificacion`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.warn(`⚠️ Error guardando calificación: ${response.status}`)
+      console.warn('📝 Respuesta del servidor:', errorText)
+      return false
+    }
+
+    console.log('✅ Calificación guardada en MariaDB')
+    return true
+  } catch (error) {
+    console.error('❌ Error guardando calificación:', error)
     return false
   }
 }

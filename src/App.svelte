@@ -1,8 +1,13 @@
 <script>
   import LoginButton from './lib/LoginButton.svelte'
+  import LanguageSwitcher from './lib/LanguageSwitcher.svelte'
   import { user } from './lib/authStore'
   import { Client } from '@gradio/client'
-  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, getUserDocRefByUid, actualizarRitmo, actualizarUltimoUso } from './lib/firebase'
+  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, getUserDocRefByUid, actualizarRitmo, actualizarUltimoUso, guardarCalificacion } from './lib/firebase'
+  import { detectarEstilos } from './lib/openaiStyleDetector'
+  import { getRandomAdvice } from './lib/adviceTexts'
+  import { t, locale } from 'svelte-i18n'
+  import { getLanguageByCountry } from './lib/countryLanguageMap'
   import { getDoc } from 'firebase/firestore'
   
   let name = 'Svelte Moibe'
@@ -21,10 +26,69 @@
   let showLoginPrompt = false
   let showToast = false
   let toastMessage = '✨ Hola, creando imagen'
+  let showToastClassification = false
+  let toastClassification = ''
+  
+  function handleTextareaKeydown(event) {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+    }
+  }
+  let showToastEstilos = false
+  let toastEstilos = ''
+  let showToastCaravaggio = false
+  let toastCaravaggio = ''
+  let estadoCaravaggio = 'sin estilo agregado' // Rastrear si se agregó Caravaggio
   let lastClassification = null // Almacenar clasificación para usar en registro de API
+  let lastEstilos = [] // Almacenar estilos detectados para usar en registro
+  let originalPrompt = '' // Almacenar prompt original sin modificaciones
+  let showRating = false // Mostrar componente de calificación
+  let showAdvice = false // Mostrar recuadro de consejos
+  let userRating = 0 // Calificación del usuario (1-5)
+  let hoveredRating = 0 // Estrella que está siendo hoveada
+  let lastId = null // Almacenar ID de registro para guardar calificación después
+  let currentAdvice = '' // Consejo aleatorio
+  let showLanguageToast = false // Mostrar toast de idioma seleccionado
+  let languageToastMessage = '' // Mensaje del toast de idioma
+  let userLanguageSet = false // Rastrear si ya se estableció el idioma del usuario
   
   const SPACE_URL = 'https://black-forest-labs-flux-2-dev.hf.space'
   const isDev = import.meta.env.DEV
+
+  // Detectar idioma cuando el usuario se loguea
+  $: if ($user && !userLanguageSet) {
+    detectUserLanguage()
+  }
+
+  async function detectUserLanguage() {
+    try {
+      const userDocRef = await getUserDocRefByUid($user.uid)
+      if (userDocRef) {
+        const userDocSnap = await getDoc(userDocRef)
+        if (userDocSnap.exists()) {
+          const userData = userDocSnap.data()
+          const country = userData.country_header || userData.country_ip
+          if (country) {
+            const detectedLanguage = getLanguageByCountry(country)
+            locale.set(detectedLanguage)
+            localStorage.setItem('locale', detectedLanguage)
+            
+            // Mostrar toast
+            const langName = detectedLanguage === 'es' ? 'Español' : 'English'
+            languageToastMessage = `🌍 Idioma: ${langName} (${country})`
+            showLanguageToast = true
+            setTimeout(() => { showLanguageToast = false }, 3000)
+            
+            console.log(`🌍 Idioma detectado: ${detectedLanguage} (País: ${country})`)
+          }
+        }
+      }
+      userLanguageSet = true
+    } catch (error) {
+      console.warn('⚠️ Error detectando idioma:', error)
+      userLanguageSet = true
+    }
+  }
 
   // Close fullscreen modal via keyboard for accessibility
   function handleKeydown(event) {
@@ -93,7 +157,7 @@
   
   async function generateImage() {
     if (!textContent.trim()) {
-      error = 'Por favor escribe algo primero'
+      error = $t('messages.writeFirst')
       return
     }
     
@@ -102,13 +166,17 @@
       return
     }
     
+    // Cerrar rating y consejos cuando se inicia una nueva generación
+    showRating = false
+    showAdvice = false
+    
     isLoading = true
     showToast = true
     const hasOpenAI = !!import.meta.env.VITE_OPENAI_API_KEY
     if (hasOpenAI) {
-      toastMessage = '🔎 Analizando prompt...'
+      toastMessage = '🔎 ' + $t('messages.analyzing')
     } else {
-      toastMessage = '⚠️ Clasificador no disponible, generando imagen'
+      toastMessage = '⚠️ ' + $t('messages.classifierUnavailable')
     }
     error = null
     progress = 0
@@ -123,7 +191,8 @@
       console.log('🎨 Generando imagen con prompt:', textContent)
 
       // Limpiar prompt: remover saltos de línea y espacios extra
-      const cleanedPrompt = textContent.replace(/\n/g, ' ').trim()
+      let cleanedPrompt = textContent.replace(/\n/g, ' ').trim()
+      originalPrompt = cleanedPrompt // Guardar el prompt original antes de modificarlo
 
       // Clasificar el prompt con OpenAI (no bloquea la generación)
       if (hasOpenAI) {
@@ -134,19 +203,75 @@
             if (cls.ok) {
               lastClassification = cls // Guardar clasificación para usar en registro
               const summary = summarizeLabels(cls.labels)
-              toastMessage = `🧠 Tipo de prompt: ${summary}`
+              toastClassification = `🧠 Tipo de prompt: ${summary}`
               console.log('✅ Clasificación:', cls.labels, '| Razones:', cls.reasons)
             } else {
-              toastMessage = '⚠️ Clasificador no disponible, generando imagen'
+              toastClassification = '⚠️ Clasificador no disponible'
               console.warn('Clasificación fallida:', cls.error || 'sin detalle')
             }
+            showToastClassification = true
+            showToast = false // Ocultar el toast inicial "Analizando prompt"
+            setTimeout(() => { showToastClassification = false }, 4000)
           } catch (e) {
-            toastMessage = '⚠️ Clasificador no disponible, generando imagen'
+            toastClassification = '⚠️ Clasificador no disponible'
             console.warn('Clasificación error:', e?.message)
+            showToastClassification = true
+            showToast = false // Ocultar el toast inicial "Analizando prompt"
+            setTimeout(() => { showToastClassification = false }, 4000)
+          }
+        })
+
+        // Detectar estilos artísticos
+        import('./lib/openaiStyleDetector').then(async (m) => {
+          try {
+            const { detectarEstilos } = m
+            console.log('🎨 DETECCIÓN DE ESTILOS INICIADA')
+            console.log('📝 Prompt:', cleanedPrompt)
+            const estilosDetectados = await detectarEstilos(cleanedPrompt)
+            console.log('🎨 Resultado de detección:', estilosDetectados)
+            if (estilosDetectados.ok) {
+              lastEstilos = estilosDetectados.estilos // Guardar para usar en registro
+              console.log('💾 lastEstilos guardado:', lastEstilos)
+              if (estilosDetectados.estilos.length > 0) {
+                toastEstilos = `🎨 Estilos: ${estilosDetectados.estilos.join(', ')}`
+                console.log('✅ Estilos encontrados:', estilosDetectados.estilos)
+                estadoCaravaggio = 'sin estilo agregado' // El usuario escribió el estilo, no fue automático
+              } else {
+                toastEstilos = `🎨 Estilos: Ninguno`
+                console.log('ℹ️ Sin estilos detectados')
+                // Si no hay estilos, 50% de probabilidad de agregar "al estilo Caravaggio"
+                if (Math.random() < 0.5) {
+                  cleanedPrompt = cleanedPrompt + ' al estilo Caravaggio'
+                  estadoCaravaggio = 'Caravaggio'
+                  toastCaravaggio = '🎨 Estilo automático: Caravaggio ✨'
+                  console.log('🎨 Estilo automático agregado: Caravaggio')
+                  console.log('📝 Prompt modificado:', cleanedPrompt)
+                } else {
+                  estadoCaravaggio = 'sin estilo agregado'
+                  toastCaravaggio = '🎨 Sin estilo automático agregado'
+                  console.log('ℹ️ Sin estilo Caravaggio agregado (probabilidad no cumplida)')
+                }
+                showToastCaravaggio = true
+                setTimeout(() => { showToastCaravaggio = false }, 4000)
+              }
+              console.log('📤 Toast estilos:', toastEstilos)
+            } else {
+              console.warn('⚠️ Error en detección de estilos')
+              toastEstilos = '⚠️ Error detectando estilos'
+            }
+            showToastEstilos = true
+            showToast = false // Ocultar el toast inicial "Analizando prompt"
+            setTimeout(() => { showToastEstilos = false }, 4000)
+          } catch (e) {
+            console.warn('⚠️ Error en detección de estilos:', e?.message)
+            toastEstilos = '⚠️ Error detectando estilos'
+            showToastEstilos = true
+            showToast = false // Ocultar el toast inicial "Analizando prompt"
+            setTimeout(() => { showToastEstilos = false }, 4000)
           }
         })
       } else {
-        console.info('ℹ️ OpenAI no disponible, se omite la clasificación')
+        console.info('ℹ️ OpenAI no disponible, se omite la clasificación y detección de estilos')
       }
       
       // Determinar seed una vez y reutilizar para cada intento
@@ -238,6 +363,11 @@
 
       generatedImage = imageUrl
       showFullImage = false
+      showRating = true // Mostrar componente de calificación
+      showAdvice = true // Mostrar recuadro de consejos
+      userRating = 0 // Resetear calificación
+      currentAdvice = getRandomAdvice() // Obtener consejo aleatorio
+      // El ID se asignará cuando la API retorne el id del registro
       console.log('✅ Imagen generada. URL:', imageUrl)
       console.log('🔑 Seed usado:', seed)
       lastSeed = seed ?? null
@@ -289,7 +419,13 @@
 
       // Registrar generación en MariaDB
       console.log('📊 Registrando en MariaDB...')
-      await registrarGeneracionEnAPI($user, cleanedPrompt, seed, providerInfo.proveedor, lastClassification)
+      console.log('🎨 lastEstilos al registrar:', lastEstilos)
+      console.log('🎨 estadoCaravaggio:', estadoCaravaggio)
+      const registroResult = await registrarGeneracionEnAPI($user, originalPrompt, seed, providerInfo.proveedor, lastClassification, lastEstilos, estadoCaravaggio)
+      if (registroResult.ok && registroResult.id) {
+        lastId = registroResult.id
+        console.log('📝 ID de registro guardado:', lastId)
+      }
       
     } catch (err) {
       console.error('❌ Error generando imagen:', err)
@@ -337,6 +473,26 @@
     font-weight: 500;
   }
 
+  .toast-classification {
+    bottom: 5.5rem;
+    right: 2rem;
+  }
+
+  .toast-estilos {
+    bottom: 9rem;
+    right: 2rem;
+  }
+
+  .toast-caravaggio {
+    bottom: 12.5rem;
+    right: 2rem;
+  }
+
+  .toast-language {
+    bottom: 16rem;
+    right: 2rem;
+  }
+
   @keyframes slideInRight {
     from {
       transform: translateX(400px);
@@ -346,6 +502,83 @@
       transform: translateX(0);
       opacity: 1;
     }
+  }
+
+  .rating-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    z-index: 998;
+  }
+
+  .rating-box {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 12px;
+    padding: 8px 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 0 25px rgba(255, 255, 255, 0.9), 0 4px 12px rgba(0, 0, 0, 0.2);
+    text-align: center;
+    position: relative;
+    z-index: 999;
+  }
+
+  .rating-title {
+    color: #0052cc;
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 2px 0;
+  }
+
+  .stars-container {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .star {
+    background: none;
+    border: none;
+    font-size: 36px;
+    cursor: pointer;
+    color: #ddd;
+    transition: all 0.2s ease;
+    padding: 5px;
+    border-radius: 8px;
+  }
+
+  .star:hover {
+    color: #ffd700;
+    transform: scale(1.2);
+  }
+
+  .star.filled {
+    color: #ffd700;
+  }
+
+  .advice-box {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 12px;
+    padding: 8px 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 0 25px rgba(255, 255, 255, 0.9), 0 4px 12px rgba(0, 0, 0, 0.2);
+    text-align: center;
+    position: relative;
+    z-index: 999;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .advice-text {
+    color: #0052cc;
+    font-size: 14px;
+    font-weight: 500;
+    margin: 0;
+    line-height: 1.4;
   }
 
   main {
@@ -410,6 +643,7 @@
   .header-right {
     display: flex;
     align-items: center;
+    gap: 15px;
     margin-left: auto;
   }
 
@@ -787,6 +1021,22 @@
   <div class="toast">{toastMessage}</div>
 {/if}
 
+{#if showToastClassification}
+  <div class="toast toast-classification">{toastClassification}</div>
+{/if}
+
+{#if showToastEstilos}
+  <div class="toast toast-estilos">{toastEstilos}</div>
+{/if}
+
+{#if showToastCaravaggio}
+  <div class="toast toast-caravaggio">{toastCaravaggio}</div>
+{/if}
+
+{#if showLanguageToast}
+  <div class="toast toast-language">{languageToastMessage}</div>
+{/if}
+
 <main>
   <div class="header-top">
     <div class="header-left">
@@ -796,13 +1046,14 @@
       </a>
     </div>
     <div class="header-right">
+      <LanguageSwitcher />
       <LoginButton />
     </div>
   </div>
 
   <div class="content">
     <div class="text-area-container">
-      <textarea maxlength="1000" bind:value={textContent} placeholder="Escribe lo que quieres crear aquí, por ejemplo: Un astronauta flotando en el espacio."></textarea>
+      <textarea maxlength="1000" bind:value={textContent} placeholder={$t('placeholders.prompt')} on:keydown={handleTextareaKeydown}></textarea>
     </div>
 
     {#if isDev}
@@ -846,7 +1097,7 @@
     
     <div class="button-container">
       <button class="create-button" disabled={isLoading} on:click={generateImage}>
-        {isLoading ? '⏳ Generando...' : '🖼️ Crear imagen'}
+        {isLoading ? '⏳ ' + $t('buttons.generating') : $t('buttons.create')}
     </button>
   </div>
   
@@ -864,9 +1115,43 @@
     <div class="login-prompt-backdrop" on:click={() => showLoginPrompt = false}></div>
     <div class="login-prompt">
       <div class="login-prompt-text">
-        Conecta con Google para poder usar gratis la app
+        {$t('login.prompt')}
       </div>
       <LoginButton />
+    </div>
+  {/if}
+  
+  {#if showRating && generatedImage}
+    <div class="rating-box">
+      <p class="rating-title">{$t('rating.title')}</p>
+      <div class="stars-container">
+        {#each [1, 2, 3, 4, 5] as star}
+          <button
+            class="star"
+            class:filled={star <= (hoveredRating || userRating)}
+            on:mouseenter={() => { hoveredRating = star }}
+            on:mouseleave={() => { hoveredRating = 0 }}
+            on:click={() => { 
+              userRating = star
+              const calificacionNumerica = star * 20 // Convertir a escala 0-100
+              console.log('⭐ Calificación:', userRating, '| Escala 0-100:', calificacionNumerica)
+              showRating = false // Cerrar banner inmediatamente
+              // Enviar la calificación sin esperar
+              guardarCalificacion($user, lastId, calificacionNumerica)
+            }}
+            title={`${star} estrellas`}
+            aria-label={`${star} estrellas`}
+          >
+            ★
+          </button>
+        {/each}
+      </div>
+    </div>
+  {/if}
+  
+  {#if showAdvice && generatedImage}
+    <div class="advice-box">
+      <p class="advice-text">💡 {currentAdvice}</p>
     </div>
   {/if}
   
@@ -885,7 +1170,7 @@
           </div>
         </div>
       {:else}
-        <p>La imagen aparecerá aquí</p>
+        <p>{$t('messages.imageAppears')}</p>
       {/if}
     </div>
   </div>
