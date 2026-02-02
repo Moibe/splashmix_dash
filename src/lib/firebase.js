@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { getFirestore, doc, setDoc, getDoc, collection, addDoc, increment, query, where, getDocs } from 'firebase/firestore'
+import { getFirestore, doc, setDoc, getDoc, collection, addDoc, increment, query, where, getDocs, deleteField } from 'firebase/firestore'
 import { dbQuota } from './firebaseQuota'
 import { tokens, proveedores, process_cost, process_margin, api_cost } from './bridges'
 
@@ -249,6 +249,86 @@ export async function getUserDocRefByUid(userUid) {
   }
 }
 
+// Función para limpiar campos de debug
+export async function limpiarCamposDebug(userUid) {
+  try {
+    console.log('🧹 Limpiando campos de debug del usuario:', userUid)
+    const userDocRef = await getUserDocRefByUid(userUid)
+    if (!userDocRef) {
+      console.warn('⚠️ No se encontró documento de usuario:', userUid)
+      return false
+    }
+    
+    await setDoc(userDocRef, {
+      racha: deleteField(),
+      _debug_force_update: deleteField()
+    }, { merge: true })
+    console.log('✅ Campos de debug eliminados')
+    return true
+  } catch (error) {
+    console.error('❌ Error limpiando campos de debug:', error)
+    return false
+  }
+}
+
+// Función para asegurar que usuarios existentes tengan los campos open_use, creditos y streak
+export async function asegurarCamposUsuario(userUid) {
+  try {
+    console.log('🔍 Buscando usuario con uid:', userUid)
+    const userDocRef = await getUserDocRefByUid(userUid)
+    if (!userDocRef) {
+      console.warn('⚠️ No se encontró documento de usuario:', userUid)
+      return false
+    }
+    
+    console.log('📍 Documento encontrado en path:', userDocRef.path)
+    const docSnap = await getDoc(userDocRef)
+    if (!docSnap.exists()) {
+      console.warn('⚠️ El documento no existe:', userUid)
+      return false
+    }
+    
+    const userData = docSnap.data()
+    console.log('📋 Datos actuales del usuario:', Object.keys(userData))
+    const fieldsToAdd = {}
+    
+    // Verificar y agregar campos faltantes
+    if (!userData.hasOwnProperty('open_use')) {
+      fieldsToAdd.open_use = true
+    }
+    if (!userData.hasOwnProperty('creditos')) {
+      fieldsToAdd.creditos = 0
+    }
+    if (!userData.hasOwnProperty('streak')) {
+      fieldsToAdd.streak = 1
+    }
+    if (!userData.hasOwnProperty('action_call')) {
+      fieldsToAdd.action_call = false
+    }
+    if (!userData.hasOwnProperty('esta_hora')) {
+      fieldsToAdd.esta_hora = 0
+    }
+    if (!userData.hasOwnProperty('ultima_generacion_hora')) {
+      fieldsToAdd.ultima_generacion_hora = null
+    }
+    
+    // Si hay campos que agregar, hacerlo
+    if (Object.keys(fieldsToAdd).length > 0) {
+      console.log('🔄 Agregando campos faltantes:', fieldsToAdd)
+      await setDoc(userDocRef, fieldsToAdd, { merge: true })
+      console.log('✅ Campos agregados exitosamente')
+      return true
+    } else {
+      console.log('ℹ️ Todos los campos ya existen')
+    }
+    
+    return false
+  } catch (error) {
+    console.error('❌ Error asegurando campos de usuario:', error)
+    return false
+  }
+}
+
 // Función para registrar nuevo usuario en Firestore
 export async function registrarNuevoUsuario(user) {
   try {
@@ -294,7 +374,13 @@ export async function registrarNuevoUsuario(user) {
       country_ip: country_ip || null,
       country_header: country_header || null,
       gaClient: gaClient,
-      explicit_counter: 0  // Inicializar contador de contenido explícito
+      explicit_counter: 0,  // Inicializar contador de contenido explícito
+      open_use: true,  // Acceso abierto
+      creditos: 0,  // Créditos iniciales
+      streak: 1,  // Racha inicial
+      action_call: false,  // Flag de acción
+      esta_hora: 0,  // Contador de acciones esta hora
+      ultima_generacion_hora: null  // Timestamp de la última generación
     })
     console.log('✅ Nuevo usuario registrado:', user.uid, '| País:', country_ip, '| GA:', gaClient)
     return true
@@ -328,6 +414,58 @@ export async function getCounterFromFirestore(userId) {
   } catch (error) {
     console.error('Error al obtener el contador:', error)
     return 0
+  }
+}
+
+// Función para contar generaciones en la última hora sin usar log_ig
+export async function actualizarEstahora(userUid) {
+  try {
+    const userDocRef = await getUserDocRefByUid(userUid)
+    
+    if (!userDocRef) {
+      console.warn('⚠️ No se encontró documento de usuario:', userUid)
+      return false
+    }
+    
+    const docSnap = await getDoc(userDocRef)
+    if (!docSnap.exists()) {
+      console.warn('⚠️ El documento no existe:', userUid)
+      return false
+    }
+    
+    const userData = docSnap.data()
+    const ahora = new Date()
+    const ultimaGeneracionHora = userData.ultima_generacion_hora ? new Date(userData.ultima_generacion_hora) : null
+    let estahora = userData.esta_hora || 0
+    
+    // Si la última generación fue hace más de 1 hora, resetear contador
+    if (ultimaGeneracionHora) {
+      const diferencia = ahora.getTime() - ultimaGeneracionHora.getTime()
+      const unaHoraMs = 60 * 60 * 1000
+      
+      if (diferencia > unaHoraMs) {
+        // Más de 1 hora, resetear a 1
+        estahora = 1
+      } else {
+        // Menos de 1 hora, incrementar
+        estahora += 1
+      }
+    } else {
+      // Primera generación, establecer a 1
+      estahora = 1
+    }
+    
+    // Actualizar documento con new count y timestamp
+    await setDoc(userDocRef, { 
+      esta_hora: estahora,
+      ultima_generacion_hora: ahora.toISOString()
+    }, { merge: true })
+    
+    console.log(`⏰ Campo esta_hora actualizado a: ${estahora}`)
+    return true
+  } catch (error) {
+    console.error('❌ Error actualizando esta_hora:', error)
+    return false
   }
 }
 
@@ -653,6 +791,73 @@ export async function guardarCalificacion(user, id, calificacionNumerica) {
     return true
   } catch (error) {
     console.error('❌ Error guardando calificación:', error)
+    return false
+  }
+}
+
+// Función para evaluar si action_call debe ser true
+export async function evaluarActionCall(userUid) {
+  try {
+    console.log('🔍 Evaluando action_call para usuario:', userUid)
+    
+    // Cargar los parámetros desde el JSON
+    const response = await fetch('/call2action.json')
+    const thresholds = await response.json()
+    console.log('📋 Umbrales cargados:', thresholds)
+    
+    // Obtener el documento del usuario
+    const userDocRef = await getUserDocRefByUid(userUid)
+    if (!userDocRef) {
+      console.warn('⚠️ No se encontró referencia del usuario')
+      return false
+    }
+    
+    const userDocSnap = await getDoc(userDocRef)
+    if (!userDocSnap.exists()) {
+      console.warn('⚠️ No se encontró documento del usuario')
+      return false
+    }
+    
+    const userData = userDocSnap.data()
+    console.log('👤 Datos del usuario:', {
+      ritmo: userData.ritmo || 0,
+      streak: userData.streak || 0,
+      explicit_counter: userData.explicit_counter || 0,
+      esta_hora: userData.esta_hora || 0
+    })
+    
+    // Evaluar cada campo
+    const evaluaciones = {
+      ritmo: (userData.ritmo || 0) > thresholds.ritmo,
+      streak: (userData.streak || 0) > thresholds.streak,
+      explicit: (userData.explicit_counter || 0) > thresholds.explicit,
+      esta_hora: (userData.esta_hora || 0) > thresholds.esta_hora
+    }
+    
+    console.log('⚖️ Comparación:', {
+      ritmo: `${userData.ritmo || 0} > ${thresholds.ritmo} = ${evaluaciones.ritmo}`,
+      streak: `${userData.streak || 0} > ${thresholds.streak} = ${evaluaciones.streak}`,
+      explicit: `${userData.explicit_counter || 0} > ${thresholds.explicit} = ${evaluaciones.explicit}`,
+      esta_hora: `${userData.esta_hora || 0} > ${thresholds.esta_hora} = ${evaluaciones.esta_hora}`
+    })
+    
+    // Si alguno supera, cambiar action_call a true
+    const actionCallActive = evaluaciones.ritmo || evaluaciones.streak || evaluaciones.explicit || evaluaciones.esta_hora
+    
+    if (actionCallActive) {
+      console.log('🚨 ACCIÓN REQUERIDA: Al menos un umbral fue superado!')
+      console.log('📌 Campos que superaron umbral:', Object.entries(evaluaciones).filter(([_, v]) => v).map(([k]) => k))
+      
+      // Actualizar action_call a true
+      await setDoc(userDocRef, { action_call: true }, { merge: true })
+      console.log('✅ action_call establecido a TRUE en Firestore')
+      return true
+    } else {
+      console.log('✅ Todos los campos están dentro de los límites')
+      return false
+    }
+  } catch (error) {
+    console.error('❌ Error evaluando action_call:', error)
     return false
   }
 }

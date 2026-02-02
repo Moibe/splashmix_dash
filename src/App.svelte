@@ -3,7 +3,8 @@
   import LanguageSwitcher from './lib/LanguageSwitcher.svelte'
   import { user } from './lib/authStore'
   import { Client } from '@gradio/client'
-  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, getUserDocRefByUid, actualizarRitmo, actualizarUltimoUso, guardarCalificacion } from './lib/firebase'
+  import { onMount } from 'svelte'
+  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, getUserDocRefByUid, actualizarRitmo, actualizarUltimoUso, guardarCalificacion, asegurarCamposUsuario, limpiarCamposDebug, actualizarEstahora, evaluarActionCall } from './lib/firebase'
   import { detectarEstilos } from './lib/openaiStyleDetector'
   import { getRandomAdvice } from './lib/adviceTexts'
   import { t, locale } from 'svelte-i18n'
@@ -48,6 +49,19 @@
   let hoveredRating = 0 // Estrella que está siendo hoveada
   let lastId = null // Almacenar ID de registro para guardar calificación después
   let currentAdvice = '' // Consejo aleatorio
+  let fieldsCleaned = false // Flag para asegurar que se ejecuta solo una vez
+  let showActionCallModal = false // Mostrar modal de action_call
+
+  // Asegurar campos de usuario cuando ingresa o inicia sesión (una sola vez)
+  $: if ($user && !fieldsCleaned) {
+    fieldsCleaned = true
+    asegurarCamposUsuario($user.uid).catch(err => {
+      console.warn('⚠️ Error asegurando campos al cargar:', err)
+    })
+    limpiarCamposDebug($user.uid).catch(err => {
+      console.warn('⚠️ Error limpiando campos de debug:', err)
+    })
+  }
   let showLanguageToast = false // Mostrar toast de idioma seleccionado
   let languageToastMessage = '' // Mensaje del toast de idioma
   let userLanguageSet = false // Rastrear si ya se estableció el idioma del usuario
@@ -165,12 +179,27 @@
       showLoginPrompt = true
       return
     }
+
+    // Checar action_call
+    try {
+      const userDocRef = await getUserDocRefByUid($user.uid)
+      if (userDocRef) {
+        const userDocSnap = await getDoc(userDocRef)
+        if (userDocSnap.exists()) {
+          const actionCall = userDocSnap.data().action_call || false
+          if (actionCall === true) {
+            showActionCallModal = true
+            return
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ Error verificando action_call:', err)
+    }
     
     // Cerrar rating y consejos cuando se inicia una nueva generación
     showRating = false
     showAdvice = false
-    
-    isLoading = true
     showToast = true
     const hasOpenAI = !!import.meta.env.VITE_OPENAI_API_KEY
     if (hasOpenAI) {
@@ -186,6 +215,8 @@
       progress += Math.random() * (progress < 80 ? 16 : 0.5)
       if (progress > 99) progress = 99
     }, 100)
+    
+    isLoading = true
     
     try {
       console.log('🎨 Generando imagen con prompt:', textContent)
@@ -392,6 +423,12 @@
 
       console.log('⏰ Actualizando último uso...')
       await actualizarUltimoUso($user)
+
+      console.log('⏰ Actualizando contador de generaciones esta hora...')
+      await actualizarEstahora($user.uid)
+
+      console.log('🔍 Evaluando umbrales de action_call...')
+      await evaluarActionCall($user.uid)
 
       // Verificar si la clasificación incluye "explicit" e incrementar contador
       if (lastClassification && lastClassification.ok && lastClassification.labels && lastClassification.labels.includes('explicit')) {
@@ -1013,6 +1050,70 @@
   .close-fullscreen:hover {
     background: rgba(0, 0, 0, 0.9);
   }
+
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-box {
+    background: rgba(255, 255, 255, 0.98);
+    border-radius: 16px;
+    padding: 40px 30px;
+    box-shadow: 0 0 40px rgba(255, 255, 255, 0.95), 0 0 80px rgba(0, 82, 204, 0.4), 0 8px 32px rgba(0, 0, 0, 0.2);
+    text-align: center;
+    max-width: 400px;
+    width: 90%;
+    position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.8);
+  }
+
+  .modal-box p {
+    margin: 0;
+    font-size: 32px;
+    font-weight: 600;
+    background: linear-gradient(135deg, #0052cc 0%, #004999 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: 1px;
+  }
+
+  .close-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(0, 82, 204, 0.1);
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #0052cc;
+    padding: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+    border: 1px solid rgba(0, 82, 204, 0.2);
+  }
+
+  .close-btn:hover {
+    background: rgba(0, 82, 204, 0.2);
+    color: #0052cc;
+    transform: scale(1.1);
+    box-shadow: 0 0 15px rgba(0, 82, 204, 0.3);
+  }
 </style>
 
 <svelte:window on:keydown={handleKeydown} />
@@ -1152,6 +1253,15 @@
   {#if showAdvice && generatedImage}
     <div class="advice-box">
       <p class="advice-text">💡 {currentAdvice}</p>
+    </div>
+  {/if}
+
+  {#if showActionCallModal}
+    <div class="modal-overlay">
+      <div class="modal-box">
+        <p>Hola</p>
+        <button class="close-btn" on:click={() => showActionCallModal = false}>✕</button>
+      </div>
     </div>
   {/if}
   
