@@ -1030,3 +1030,51 @@ export async function crearSesionPago(userUid) {
     return null
   }
 }
+
+// Función para obtener el precio actual del usuario basado en su país
+export async function obtenerPrecioActual(userUid) {
+  try {
+    // Obtener datos del usuario
+    const userDocRef = await getUserDocRefByUid(userUid)
+    if (!userDocRef) {
+      console.warn('⚠️ No se encontró referencia del usuario')
+      return null
+    }
+    
+    const userDocSnap = await getDoc(userDocRef)
+    if (!userDocSnap.exists()) {
+      console.warn('⚠️ No se encontró documento del usuario')
+      return null
+    }
+    
+    const userData = userDocSnap.data()
+    const userCountry = userData.country_ip || userData.country_header || 'MX'
+    
+    // Cargar mapeo de precios por país
+    const response = await fetch('/prices-by-country.json')
+    const pricesMap = await response.json()
+    
+    // Obtener el precio según el país
+    const priceData = pricesMap[userCountry] || pricesMap['MX']
+    
+    if (!priceData) {
+      console.warn('⚠️ No se encontró precio para país:', userCountry)
+      return null
+    }
+    
+    console.log('💰 Precio obtenido:', {
+      country: userCountry,
+      currency: priceData.currency,
+      amount: priceData.amount
+    })
+    
+    return {
+      amount: priceData.amount,
+      currency: priceData.currency,
+      country: userCountry
+    }
+  } catch (error) {
+    console.error('❌ Error obteniendo precio actual:', error)
+    return null
+  }
+}

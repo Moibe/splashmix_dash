@@ -2,9 +2,11 @@
   import LoginButton from './lib/LoginButton.svelte'
   import LanguageSwitcher from './lib/LanguageSwitcher.svelte'
   import { user } from './lib/authStore'
+  import { auth } from './lib/firebase'
+  import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth'
   import { Client } from '@gradio/client'
   import { onMount } from 'svelte'
-  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, getUserDocRefByUid, actualizarRitmo, actualizarUltimoUso, guardarCalificacion, asegurarCamposUsuario, limpiarCamposDebug, actualizarEstahora, evaluarActionCall, crearSesionPago } from './lib/firebase'
+  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, getUserDocRefByUid, actualizarRitmo, actualizarUltimoUso, guardarCalificacion, asegurarCamposUsuario, limpiarCamposDebug, actualizarEstahora, evaluarActionCall, crearSesionPago, obtenerPrecioActual } from './lib/firebase'
   import { detectarEstilos } from './lib/openaiStyleDetector'
   import { getRandomAdvice } from './lib/adviceTexts'
   import { t, locale } from 'svelte-i18n'
@@ -51,6 +53,8 @@
   let currentAdvice = '' // Consejo aleatorio
   let fieldsCleaned = false // Flag para asegurar que se ejecuta solo una vez
   let showActionCallModal = false // Mostrar modal de action_call
+  let showWelcomeModal = false // Mostrar modal de bienvenida
+  let modalPrice = null // Precio dinámico según país para la modal
 
   // Asegurar campos de usuario cuando ingresa o inicia sesión (una sola vez)
   $: if ($user && !fieldsCleaned) {
@@ -62,6 +66,34 @@
       console.warn('⚠️ Error limpiando campos de debug:', err)
     })
   }
+
+  // Obtener precio cuando se abre el modal
+  $: if (showActionCallModal && $user) {
+    obtenerPrecioActual($user.uid).then(priceInfo => {
+      if (priceInfo) {
+        modalPrice = priceInfo
+      }
+    })
+  }
+
+  // Mostrar modal de bienvenida apenas carga la página
+  let welcomeShownInSession = false
+  $: if (!welcomeShownInSession && !sessionStorage.getItem('welcomeShown')) {
+    showWelcomeModal = true
+    welcomeShownInSession = true
+  }
+
+  async function handleGoogleLoginFromWelcome() {
+    try {
+      const provider = new GoogleAuthProvider()
+      await signInWithPopup(auth, provider)
+      showWelcomeModal = false
+      sessionStorage.setItem('welcomeShown', 'true')
+    } catch (err) {
+      console.error('Error al autenticarse:', err)
+    }
+  }
+
   let showLanguageToast = false // Mostrar toast de idioma seleccionado
   let languageToastMessage = '' // Mensaje del toast de idioma
   let userLanguageSet = false // Rastrear si ya se estableció el idioma del usuario
@@ -1110,7 +1142,7 @@
     padding: 40px 30px;
     box-shadow: 0 0 40px rgba(255, 255, 255, 0.95), 0 0 80px rgba(0, 82, 204, 0.4), 0 8px 32px rgba(0, 0, 0, 0.2);
     text-align: center;
-    max-width: 400px;
+    max-width: 500px;
     width: 90%;
     position: relative;
     border: 1px solid rgba(255, 255, 255, 0.8);
@@ -1128,18 +1160,98 @@
     margin-bottom: 20px;
   }
 
+  .modal-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    margin-top: 30px;
+    gap: 16px;
+  }
+
+  .modal-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+  }
+
+  .modal-radio {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    flex-shrink: 0;
+    accent-color: #004999 !important;
+    -webkit-appearance: none;
+    appearance: none;
+    background: white;
+    border: 2px solid #004999;
+    border-radius: 50%;
+    outline: none;
+    position: relative;
+  }
+
+  .modal-radio:checked {
+    background: #004999;
+    border-color: #004999;
+  }
+
+  .modal-radio:checked::after {
+    content: '';
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    background: white;
+    border-radius: 50%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  .modal-title-small {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    white-space: nowrap;
+  }
+
+  .modal-header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .modal-price-inline {
+    font-size: 18px;
+    font-weight: 600;
+    color: #0052cc;
+  }
+
+  .modal-price {
+    margin: 0 !important;
+    margin-bottom: 20px !important;
+    font-size: 24px !important;
+    font-weight: 500 !important;
+    color: #666 !important;
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    -webkit-text-fill-color: unset !important;
+    background-clip: unset !important;
+  }
+
   .modal-buy-btn {
     background: linear-gradient(135deg, #0052cc 0%, #004999 100%);
     border: none;
     color: white;
-    padding: 12px 32px;
-    font-size: 16px;
+    padding: 10px 24px;
+    font-size: 14px;
     font-weight: 600;
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.2s ease;
     box-shadow: 0 4px 15px rgba(0, 82, 204, 0.3);
-    margin-bottom: 15px;
+    white-space: nowrap;
   }
 
   .modal-buy-btn:hover {
@@ -1151,21 +1263,35 @@
     transform: translateY(0);
   }
 
+  .stripe-security {
+    margin-top: 15px;
+    margin-bottom: 0;
+    font-size: 11px !important;
+    color: #888 !important;
+    text-align: center;
+    font-weight: 400 !important;
+    letter-spacing: 0.5px;
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    -webkit-text-fill-color: unset !important;
+    background-clip: unset !important;
+  }
+
   .close-btn {
     position: absolute;
     top: 12px;
     right: 12px;
     background: rgba(0, 82, 204, 0.1);
     border: none;
-    font-size: 24px;
+    font-size: 16px;
     cursor: pointer;
     color: #0052cc;
-    padding: 5px;
+    padding: 3px;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     transition: all 0.2s ease;
     border: 1px solid rgba(0, 82, 204, 0.2);
@@ -1176,6 +1302,82 @@
     color: #0052cc;
     transform: scale(1.1);
     box-shadow: 0 0 15px rgba(0, 82, 204, 0.3);
+  }
+
+  .welcome-modal {
+    max-width: 500px;
+  }
+
+  .welcome-title {
+    font-size: 28px !important;
+    font-weight: 700 !important;
+    margin-bottom: 16px !important;
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    -webkit-text-fill-color: unset !important;
+    background-clip: unset !important;
+    color: #0052cc !important;
+    letter-spacing: 0 !important;
+  }
+
+  .welcome-text {
+    font-size: 16px !important;
+    font-weight: 400 !important;
+    color: #444 !important;
+    line-height: 1.6 !important;
+    margin-bottom: 16px !important;
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    -webkit-text-fill-color: unset !important;
+    background-clip: unset !important;
+    letter-spacing: 0 !important;
+  }
+
+  .welcome-subtitle {
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    color: #0052cc !important;
+    margin-bottom: 12px !important;
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    -webkit-text-fill-color: unset !important;
+    background-clip: unset !important;
+    letter-spacing: 0 !important;
+  }
+
+  .welcome-text-final {
+    font-size: 15px !important;
+    font-weight: 400 !important;
+    color: #666 !important;
+    line-height: 1.5 !important;
+    margin-bottom: 24px !important;
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    -webkit-text-fill-color: unset !important;
+    background-clip: unset !important;
+    letter-spacing: 0 !important;
+  }
+
+  .welcome-btn {
+    background: linear-gradient(135deg, #0052cc 0%, #004999 100%);
+    border: none;
+    color: white;
+    padding: 12px 40px;
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 15px rgba(0, 82, 204, 0.3);
+  }
+
+  .welcome-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 25px rgba(0, 82, 204, 0.5);
+  }
+
+  .welcome-btn:active {
+    transform: translateY(0);
   }
 </style>
 
@@ -1322,9 +1524,39 @@
   {#if showActionCallModal}
     <div class="modal-overlay">
       <div class="modal-box">
-        <p>Hola</p>
-        <button class="modal-buy-btn" on:click={irAComprar}>Comprar</button>
+        <div class="modal-header-row">
+          <div class="modal-header-left">
+            <input type="radio" checked disabled class="modal-radio" />
+            <span class="modal-title-small">Acceso Ilimitado por Siempre</span>
+          </div>
+          <div class="modal-header-right">
+            {#if modalPrice}
+              <span class="modal-price-inline">{modalPrice.amount} {modalPrice.currency}</span>
+            {/if}
+            <button class="modal-buy-btn" on:click={irAComprar}>Comprar</button>
+          </div>
+        </div>
+        <p class="stripe-security">Pago Seguro con Stripe ®</p>
         <button class="close-btn" on:click={() => showActionCallModal = false}>✕</button>
+      </div>
+    </div>
+  {/if}
+
+  {#if showWelcomeModal}
+    <div class="modal-overlay">
+      <div class="modal-box welcome-modal">
+        <p class="welcome-title">Hola 👋🏻 bienvenido a Splashmix 🐙</p>
+        <p class="welcome-text">una nueva forma más rápida 🚀, mas precisa 🔍, más brillante ☀️ de generación de imágenes con IA 🤖</p>
+        <p class="welcome-subtitle">¡¡Gracias por ser uno de los primeros usuarios 🧑🏻‍🚀!!</p>
+        <p class="welcome-text-final">Puedes probar generar toda clase de imágenes de forma gratuita. Tu opinión 💬 es muy importante.</p>
+        {#if $user}
+          <button class="welcome-btn" on:click={() => {
+            showWelcomeModal = false
+            sessionStorage.setItem('welcomeShown', 'true')
+          }}>Comenzar</button>
+        {:else}
+          <button class="welcome-btn" on:click={handleGoogleLoginFromWelcome}>🔐 Conecta con Google</button>
+        {/if}
       </div>
     </div>
   {/if}
