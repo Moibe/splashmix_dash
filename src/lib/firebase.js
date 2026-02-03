@@ -923,8 +923,9 @@ export async function crearSesionPago(userUid) {
     params.append('customer_email', userEmail)
     params.append('customer_id', '')
     params.append('firebase_user', userUid)
-    params.append('unidades', '10')
+    params.append('unidades', '9999')
     params.append('mode', 'payment')
+    params.append('app', 'imagen')
     params.append('gaCliente', gaClient || '')
     
     console.log('📤 Enviando a Stripe Kraken (URLEncoded):', {
@@ -933,6 +934,7 @@ export async function crearSesionPago(userUid) {
       firebase_user: userUid,
       unidades: 10,
       mode: 'payment',
+      app: 'imagen',
       gaCliente: gaClient
     })
     
@@ -943,6 +945,7 @@ export async function crearSesionPago(userUid) {
       firebase_user: userUid,
       unidades: 10,
       mode: 'payment',
+      app: 'imagen',
       gaCliente: gaClient,
       timestamp: new Date().toISOString()
     }))
