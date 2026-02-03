@@ -4,7 +4,7 @@
   import { user } from './lib/authStore'
   import { Client } from '@gradio/client'
   import { onMount } from 'svelte'
-  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, getUserDocRefByUid, actualizarRitmo, actualizarUltimoUso, guardarCalificacion, asegurarCamposUsuario, limpiarCamposDebug, actualizarEstahora, evaluarActionCall } from './lib/firebase'
+  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, getUserDocRefByUid, actualizarRitmo, actualizarUltimoUso, guardarCalificacion, asegurarCamposUsuario, limpiarCamposDebug, actualizarEstahora, evaluarActionCall, crearSesionPago } from './lib/firebase'
   import { detectarEstilos } from './lib/openaiStyleDetector'
   import { getRandomAdvice } from './lib/adviceTexts'
   import { t, locale } from 'svelte-i18n'
@@ -126,6 +126,24 @@
     console.warn('⚠️ GA Client NO detectado')
   }
   
+  // Mostrar último request a Kraken si existe en sessionStorage
+  const lastKrakenRequest = sessionStorage.getItem('lastKrakenRequest')
+  if (lastKrakenRequest) {
+    try {
+      const request = JSON.parse(lastKrakenRequest)
+      console.log('📋 ═════════════════════════════════════════════════════')
+      console.log('📋 ÚLTIMO REQUEST ENVIADO A STRIPE KRAKEN')
+      console.log('📋 ═════════════════════════════════════════════════════')
+      console.log(request)
+      console.log('📋 ═════════════════════════════════════════════════════')
+      console.log('💡 Puedes copiar el objeto anterior desde la consola')
+      // Limpiar después de mostrar
+      sessionStorage.removeItem('lastKrakenRequest')
+    } catch (e) {
+      console.warn('⚠️ Error leyendo lastKrakenRequest:', e)
+    }
+  }
+  
   // Limpiar imagen y texto cuando cierra sesión
   $: if (!$user) {
     generatedImage = null
@@ -167,6 +185,27 @@
       .catch(err => {
         console.error('❌ Error descargando imagen:', err)
       })
+  }
+
+  async function irAComprar() {
+    if (!$user) {
+      console.warn('⚠️ Usuario no autenticado')
+      showLoginPrompt = true
+      return
+    }
+
+    console.log('🛒 Iniciando compra para usuario:', $user.uid)
+    const paymentLink = await crearSesionPago($user.uid)
+    
+    if (paymentLink) {
+      console.log('🔗 Redirigiendo a:', paymentLink)
+      window.location.href = paymentLink
+    } else {
+      console.error('❌ No se pudo obtener el link de pago')
+      toastMessage = '❌ Error al iniciar la compra'
+      showToast = true
+      setTimeout(() => { showToast = false }, 3000)
+    }
   }
   
   async function generateImage() {
@@ -1086,6 +1125,30 @@
     -webkit-text-fill-color: transparent;
     background-clip: text;
     letter-spacing: 1px;
+    margin-bottom: 20px;
+  }
+
+  .modal-buy-btn {
+    background: linear-gradient(135deg, #0052cc 0%, #004999 100%);
+    border: none;
+    color: white;
+    padding: 12px 32px;
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 15px rgba(0, 82, 204, 0.3);
+    margin-bottom: 15px;
+  }
+
+  .modal-buy-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 25px rgba(0, 82, 204, 0.5);
+  }
+
+  .modal-buy-btn:active {
+    transform: translateY(0);
   }
 
   .close-btn {
@@ -1260,6 +1323,7 @@
     <div class="modal-overlay">
       <div class="modal-box">
         <p>Hola</p>
+        <button class="modal-buy-btn" on:click={irAComprar}>Comprar</button>
         <button class="close-btn" on:click={() => showActionCallModal = false}>✕</button>
       </div>
     </div>

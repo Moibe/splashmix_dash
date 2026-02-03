@@ -861,3 +861,172 @@ export async function evaluarActionCall(userUid) {
     return false
   }
 }
+
+// Función para crear sesión de pago en Stripe Kraken
+export async function crearSesionPago(userUid) {
+  try {
+    console.log('💳 Iniciando creación de sesión de pago...')
+    
+    // Obtener datos del usuario
+    const userDocRef = await getUserDocRefByUid(userUid)
+    if (!userDocRef) {
+      console.error('❌ No se encontró referencia del usuario')
+      return null
+    }
+    
+    const userDocSnap = await getDoc(userDocRef)
+    if (!userDocSnap.exists()) {
+      console.error('❌ No se encontró documento del usuario')
+      return null
+    }
+    
+    const userData = userDocSnap.data()
+    const userEmail = userData.email || 'unknown@email.com'
+    const gaClient = userData.gaClient || null
+    
+    // Obtener país: primero country_ip, luego country_header
+    const userCountry = userData.country_ip || userData.country_header || 'MX'
+    
+    console.log('👤 Datos del usuario para pago:', {
+      email: userEmail,
+      firebase_user: userUid,
+      gaClient: gaClient,
+      country: userCountry
+    })
+    
+    // Cargar mapeo de precios por país
+    const response = await fetch('/prices-by-country.json')
+    const pricesMap = await response.json()
+    console.log('📋 Mapeo de precios cargado')
+    
+    // Obtener el price_id según el país
+    const priceData = pricesMap[userCountry]
+    if (!priceData) {
+      console.warn(`⚠️ País ${userCountry} no encontrado en el mapeo, usando MX por defecto`)
+      pricesMap['MX'] // fallback a México
+    }
+    
+    const priceId = priceData?.price_id || 'price_1SwUsYIYi36CbmfWu5fqs4oC'
+    const currency = priceData?.currency || 'MXN'
+    const amount = priceData?.amount || 100
+    
+    console.log('💰 Precio seleccionado:', {
+      country: userCountry,
+      currency: currency,
+      amount: amount,
+      price_id: priceId
+    })
+    
+    // Preparar payload para Stripe Kraken - usar URLSearchParams
+    const params = new URLSearchParams()
+    params.append('price_id', priceId)
+    params.append('customer_email', userEmail)
+    params.append('customer_id', '')
+    params.append('firebase_user', userUid)
+    params.append('unidades', '10')
+    params.append('mode', 'payment')
+    params.append('gaCliente', gaClient || '')
+    
+    console.log('📤 Enviando a Stripe Kraken (URLEncoded):', {
+      price_id: priceId,
+      customer_email: userEmail,
+      firebase_user: userUid,
+      unidades: 10,
+      mode: 'payment',
+      gaCliente: gaClient
+    })
+    
+    // Guardar datos enviados en sessionStorage para verlos después del redirect
+    sessionStorage.setItem('lastKrakenRequest', JSON.stringify({
+      price_id: priceId,
+      customer_email: userEmail,
+      firebase_user: userUid,
+      unidades: 10,
+      mode: 'payment',
+      gaCliente: gaClient,
+      timestamp: new Date().toISOString()
+    }))
+    
+    // Llamar a la API de Stripe Kraken
+    const stripeResponse = await fetch('https://moibe-stripe-kraken-prod.hf.space/creaLinkSesion/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: params.toString()
+    })
+    
+    if (!stripeResponse.ok) {
+      const errorText = await stripeResponse.text()
+      console.error(`❌ Error en respuesta de Stripe Kraken (${stripeResponse.status}):`, errorText)
+      console.error('📝 Estado:', stripeResponse.status)
+      console.error('📝 Headers:', stripeResponse.headers)
+      return null
+    }
+    
+    // Leer la respuesta como texto primero
+    const responseText = await stripeResponse.text()
+    console.log('📝 Respuesta cruda de Stripe Kraken:', responseText)
+    console.log('📋 Tipo de contenido:', stripeResponse.headers.get('content-type'))
+    console.log('📋 Longitud respuesta:', responseText?.length || 0)
+    
+    // Verificar si la respuesta está vacía o es "null"
+    if (!responseText || responseText.trim() === '' || responseText.trim() === 'null') {
+      console.error('❌ Respuesta inválida del servidor')
+      console.error('⚠️ Tu API está retornando: ' + responseText)
+      console.error('⚠️ Esperaba una URL o un JSON con el link')
+      return null
+    }
+    
+    // Si la respuesta es una URL directa (string con https://)
+    if (responseText.trim().startsWith('"https://') || responseText.trim().startsWith('https://')) {
+      let paymentLink = responseText.trim()
+      
+      // Si viene entre comillas, removerlas
+      if (paymentLink.startsWith('"') && paymentLink.endsWith('"')) {
+        paymentLink = paymentLink.slice(1, -1)
+      }
+      
+      console.log('✅ URL detectada directamente en respuesta')
+      console.log('🔗 Link de pago obtenido:', paymentLink)
+      return paymentLink
+    }
+    
+    // Si no, intentar parsear como JSON
+    let data
+    try {
+      data = JSON.parse(responseText)
+      console.log('✅ Respuesta JSON parseada:', data)
+      console.log('📋 Tipo de data:', typeof data)
+      console.log('📋 Claves en respuesta:', Object.keys(data || {}))
+      
+      // Log detallado de cada valor
+      if (data && typeof data === 'object') {
+        for (const [key, value] of Object.entries(data)) {
+          console.log(`  ${key}: ${value}`)
+        }
+      }
+    } catch (parseError) {
+      console.error('❌ Error parseando JSON:', parseError)
+      console.error('📝 Respuesta no es JSON válido:', responseText)
+      return null
+    }
+    
+    // Obtener el link de la respuesta - intentar múltiples claves
+    const paymentLink = data?.url || data?.link || data?.sessionUrl || data?.session_url || data?.checkout_session_url || data?.checkoutUrl || data?.paymentLink || data?.redirect_url || null
+    
+    if (!paymentLink) {
+      console.error('❌ No se recibió link de pago en la respuesta')
+      console.log('📋 Estructura completa de respuesta:', JSON.stringify(data, null, 2))
+      console.log('📋 Claves disponibles:', Object.keys(data || {}))
+      return null
+    }
+    
+    console.log('🔗 Link de pago obtenido:', paymentLink)
+    return paymentLink
+    
+  } catch (error) {
+    console.error('❌ Error creando sesión de pago:', error)
+    return null
+  }
+}
