@@ -101,6 +101,23 @@
   
   const SPACE_URL = 'https://black-forest-labs-flux-2-dev.hf.space'
   const isDev = import.meta.env.DEV
+  
+  // ⚙️ Configuración: Bandera para mostrar toast de clasificación en producción
+  const showClassificationToastInProd = false // Cambiar a true para ver el toast en producción
+  
+  // ⚙️ Configuración: Bandera para mostrar logs de consola en producción
+  const showConsoleLogsInProd = false // Cambiar a true para ver logs en producción
+  
+  // Wrapper para console.log que respeta las banderas
+  const originalConsoleLog = console.log
+  const originalConsoleWarn = console.warn
+  const originalConsoleError = console.error
+  
+  if (!isDev && !showConsoleLogsInProd) {
+    console.log = () => {}
+    console.warn = () => {}
+    // console.error se mantiene siempre visible por seguridad
+  }
 
   // Detectar idioma cuando el usuario se loguea
   $: if ($user && !userLanguageSet) {
@@ -331,8 +348,8 @@
               toastClassification = '⚠️ Clasificador no disponible'
               console.warn('Clasificación fallida:', cls.error || 'sin detalle')
             }
-            // Solo mostrar toast de clasificación en modo dev
-            if (isDev) {
+            // Mostrar toast en dev o si está habilitado en prod
+            if (isDev || showClassificationToastInProd) {
               showToastClassification = true
               setTimeout(() => { showToastClassification = false }, 4000)
             }
@@ -340,8 +357,8 @@
           } catch (e) {
             toastClassification = '⚠️ Clasificador no disponible'
             console.warn('Clasificación error:', e?.message)
-            // Solo mostrar toast de clasificación en modo dev
-            if (isDev) {
+            // Mostrar toast en dev o si está habilitado en prod
+            if (isDev || showClassificationToastInProd) {
               showToastClassification = true
               setTimeout(() => { showToastClassification = false }, 4000)
             }
