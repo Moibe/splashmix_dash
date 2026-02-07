@@ -55,6 +55,7 @@
   let showActionCallModal = false // Mostrar modal de action_call
   let showWelcomeModal = false // Mostrar modal de bienvenida
   let modalPrice = null // Precio dinámico según país para la modal
+  let loadingPayment = false // Mostrar spinner de carga en el botón de comprar
 
   // Asegurar campos de usuario cuando ingresa o inicia sesión (una sola vez)
   $: if ($user && !fieldsCleaned) {
@@ -227,13 +228,32 @@
     }
 
     console.log('🛒 Iniciando compra para usuario:', $user.uid)
-    const paymentLink = await crearSesionPago($user.uid)
     
-    if (paymentLink) {
-      console.log('🔗 Redirigiendo a:', paymentLink)
-      window.location.href = paymentLink
-    } else {
-      console.error('❌ No se pudo obtener el link de pago')
+    // Configurar timeout para mostrar spinner después de 4 segundos
+    const loadingTimeout = setTimeout(() => {
+      loadingPayment = true
+    }, 4000)
+    
+    try {
+      const paymentLink = await crearSesionPago($user.uid)
+      
+      // Limpiar timeout si la respuesta llega antes de 4 segundos
+      clearTimeout(loadingTimeout)
+      loadingPayment = false
+      
+      if (paymentLink) {
+        console.log('🔗 Redirigiendo a:', paymentLink)
+        window.location.href = paymentLink
+      } else {
+        console.error('❌ No se pudo obtener el link de pago')
+        toastMessage = '❌ Error al iniciar la compra'
+        showToast = true
+        setTimeout(() => { showToast = false }, 3000)
+      }
+    } catch (error) {
+      clearTimeout(loadingTimeout)
+      loadingPayment = false
+      console.error('❌ Error en irAComprar:', error)
       toastMessage = '❌ Error al iniciar la compra'
       showToast = true
       setTimeout(() => { showToast = false }, 3000)
@@ -1252,15 +1272,39 @@
     transition: all 0.2s ease;
     box-shadow: 0 4px 15px rgba(0, 82, 204, 0.3);
     white-space: nowrap;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 80px;
   }
 
-  .modal-buy-btn:hover {
+  .modal-buy-btn:hover:not(:disabled) {
     transform: translateY(-2px);
     box-shadow: 0 6px 25px rgba(0, 82, 204, 0.5);
   }
 
-  .modal-buy-btn:active {
+  .modal-buy-btn:active:not(:disabled) {
     transform: translateY(0);
+  }
+
+  .modal-buy-btn:disabled {
+    opacity: 0.7;
+    cursor: wait;
+  }
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .stripe-security {
@@ -1533,7 +1577,13 @@
             {#if modalPrice}
               <span class="modal-price-inline">{modalPrice.amount} {modalPrice.currency}</span>
             {/if}
-            <button class="modal-buy-btn" on:click={irAComprar}>Comprar</button>
+            <button class="modal-buy-btn" on:click={irAComprar} disabled={loadingPayment}>
+              {#if loadingPayment}
+                <span class="spinner"></span>
+              {:else}
+                Comprar
+              {/if}
+            </button>
           </div>
         </div>
         <p class="stripe-security">Pago Seguro con Stripe ®</p>
