@@ -331,15 +331,21 @@
               toastClassification = '⚠️ Clasificador no disponible'
               console.warn('Clasificación fallida:', cls.error || 'sin detalle')
             }
-            showToastClassification = true
+            // Solo mostrar toast de clasificación en modo dev
+            if (isDev) {
+              showToastClassification = true
+              setTimeout(() => { showToastClassification = false }, 4000)
+            }
             showToast = false // Ocultar el toast inicial "Analizando prompt"
-            setTimeout(() => { showToastClassification = false }, 4000)
           } catch (e) {
             toastClassification = '⚠️ Clasificador no disponible'
             console.warn('Clasificación error:', e?.message)
-            showToastClassification = true
+            // Solo mostrar toast de clasificación en modo dev
+            if (isDev) {
+              showToastClassification = true
+              setTimeout(() => { showToastClassification = false }, 4000)
+            }
             showToast = false // Ocultar el toast inicial "Analizando prompt"
-            setTimeout(() => { showToastClassification = false }, 4000)
           }
         })
 
