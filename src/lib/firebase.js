@@ -311,6 +311,9 @@ export async function asegurarCamposUsuario(userUid) {
     if (!userData.hasOwnProperty('ultima_generacion_hora')) {
       fieldsToAdd.ultima_generacion_hora = null
     }
+    if (!userData.hasOwnProperty('fecha_registro')) {
+      fieldsToAdd.fecha_registro = new Date().toISOString()
+    }
     
     // Si hay campos que agregar, hacerlo
     if (Object.keys(fieldsToAdd).length > 0) {
@@ -795,6 +798,73 @@ export async function guardarCalificacion(user, id, calificacionNumerica) {
   }
 }
 
+// Función para registrar acción en MariaDB
+async function registrarActionEnMariaDB(userData, userUid, documentId, triggerFields = []) {
+  try {
+    console.log('🔴 [MARIADB] Iniciando registro de acción...')
+    const apiUrl = import.meta.env.VITE_API_URL
+    console.log('🔴 [MARIADB] VITE_API_URL:', apiUrl)
+    
+    if (!apiUrl) {
+      console.warn('⚠️ VITE_API_URL no configurado')
+      return false
+    }
+    
+    // Construir el trigger_action basado en los campos que fueron superados
+    const triggerAction = triggerFields.length > 0 ? triggerFields.join(', ') : 'unknown'
+    console.log('🔴 [MARIADB] Trigger action:', triggerAction)
+    console.log('🔴 [MARIADB] Document ID (usuario):', documentId)
+    
+    const payload = {
+      usuario: documentId,
+      uid: userUid,
+      displayName: userData.displayName || null,
+      email: userData.email || null,
+      action_call: userData.action_call ? 1 : 0,
+      trigger_action: triggerAction,
+      country_header: userData.country_header || null,
+      country_ip: userData.country_ip || null,
+      creditos: userData.creditos || 0,
+      esta_hora: userData.esta_hora || 0,
+      explicit_counter: userData.explicit_counter || 0,
+      fecha_registro: userData.fecha_registro || null,
+      gaClient: userData.gaClient || null,
+      open_use: userData.open_use ? 1 : 0,
+      ritmo: userData.ritmo || 0,
+      streak: userData.streak || 0,
+      ultima_generacion_hora: userData.ultima_generacion_hora || null,
+      ultimo_uso: userData.ultimo_uso || null,
+      usos: userData.usos || 0
+    }
+    
+    console.log('🔴 [MARIADB] Payload completo:', payload)
+    
+    const response = await fetch(`${apiUrl}/action`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+    
+    console.log('🔴 [MARIADB] Response status:', response.status)
+    console.log('🔴 [MARIADB] Response ok:', response.ok)
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`❌ [MARIADB] Error al registrar acción (${response.status}):`, errorText)
+      return false
+    }
+    
+    const result = await response.json()
+    console.log('✅ [MARIADB] Acción registrada en MariaDB:', result)
+    return true
+  } catch (error) {
+    console.error('❌ [MARIADB] Error registrando acción en MariaDB:', error)
+    return false
+  }
+}
+
 // Función para evaluar si action_call debe ser true
 export async function evaluarActionCall(userUid) {
   try {
@@ -846,11 +916,30 @@ export async function evaluarActionCall(userUid) {
     
     if (actionCallActive) {
       console.log('🚨 ACCIÓN REQUERIDA: Al menos un umbral fue superado!')
-      console.log('📌 Campos que superaron umbral:', Object.entries(evaluaciones).filter(([_, v]) => v).map(([k]) => k))
+      
+      // Identificar cuáles campos gatillaron la acción
+      const triggerFields = Object.entries(evaluaciones)
+        .filter(([_, v]) => v)
+        .map(([k]) => k)
+      
+      console.log('📌 Campos que superaron umbral:', triggerFields)
+      
+      // Obtener el ID del documento (nombre timestamp-correo)
+      const documentId = userDocRef.id
+      console.log('📄 Document ID:', documentId)
       
       // Actualizar action_call a true
       await setDoc(userDocRef, { action_call: true }, { merge: true })
       console.log('✅ action_call establecido a TRUE en Firestore')
+      
+      // Actualizar userData localmente antes de enviar a MariaDB
+      userData.action_call = true
+      
+      // Registrar la acción en MariaDB con los trigger fields
+      console.log('📤 Llamando registrarActionEnMariaDB...') 
+      const mariadbResult = await registrarActionEnMariaDB(userData, userUid, documentId, triggerFields)
+      console.log('📤 Resultado de registrarActionEnMariaDB:', mariadbResult)
+      
       return true
     } else {
       console.log('✅ Todos los campos están dentro de los límites')
