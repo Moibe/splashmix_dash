@@ -6,7 +6,7 @@
   import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth'
   import { Client } from '@gradio/client'
   import { onMount } from 'svelte'
-  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, getUserDocRefByUid, actualizarRitmo, actualizarUltimoUso, guardarCalificacion, asegurarCamposUsuario, limpiarCamposDebug, actualizarEstahora, evaluarActionCall, crearSesionPago, obtenerPrecioActual } from './lib/firebase'
+  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, restarCredito, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, getUserDocRefByUid, actualizarRitmo, actualizarUltimoUso, guardarCalificacion, asegurarCamposUsuario, limpiarCamposDebug, actualizarEstahora, evaluarActionCall, crearSesionPago, obtenerPrecioActual } from './lib/firebase'
   import { detectarEstilos } from './lib/openaiStyleDetector'
   import { getRandomAdvice } from './lib/adviceTexts'
   import { t, locale } from 'svelte-i18n'
@@ -56,6 +56,8 @@
   let showWelcomeModal = false // Mostrar modal de bienvenida
   let modalPrice = null // Precio dinámico según país para la modal
   let loadingPayment = false // Mostrar spinner de carga en el botón de comprar
+  let activeTab = 'generate' // 'generate' o 'newTab'
+  let uploadedImage = null // Imagen cargada por el usuario en la nueva pestaña
 
   // Asegurar campos de usuario cuando ingresa o inicia sesión (una sola vez)
   $: if ($user && !fieldsCleaned) {
@@ -272,6 +274,21 @@
       loadingPayment = false
       console.error('❌ Error en irAComprar:', error)
       toastMessage = '❌ Error al iniciar la compra'
+      showToast = true
+      setTimeout(() => { showToast = false }, 3000)
+    }
+  }
+
+  function handleImageUpload(event) {
+    const file = event.target.files[0]
+    if (file && file.type.startsWith('image/')) {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        uploadedImage = e.target.result
+      }
+      reader.readAsDataURL(file)
+    } else {
+      toastMessage = '⚠️ Por favor selecciona una imagen válida'
       showToast = true
       setTimeout(() => { showToast = false }, 3000)
     }
@@ -529,7 +546,10 @@
       console.log('📊 Incrementando contador de usos...')
       await incrementarUsos($user)
 
-      console.log('🔄 Actualizando cuota del proveedor...')
+      console.log('� Restando crédito al usuario...')
+      await restarCredito($user)
+
+      console.log('�🔄 Actualizando cuota del proveedor...')
       await actualizarCuotaDespuesDeGenerar(providerInfo.proveedor, providerInfo.quotaDisponible)
 
       console.log('📊 Actualizando ritmo en Firestore...')
@@ -1446,6 +1466,147 @@
   .welcome-btn:active {
     transform: translateY(0);
   }
+
+  /* Estilos para las pestañas */
+  .tabs-container {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin: 20px 0 10px 0;
+    padding: 0 20px;
+  }
+
+  .tab-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    padding: 8px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border-bottom: 2px solid transparent;
+    position: relative;
+  }
+
+  .tab-btn:hover {
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .tab-btn.active {
+    color: rgba(255, 255, 255, 1);
+    border-bottom: 2px solid rgba(255, 255, 255, 0.8);
+  }
+
+  .empty-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+  }
+
+  .empty-text {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 16px;
+    font-weight: 400;
+  }
+
+  /* Layout de dos columnas para nueva pestaña */
+  .two-column-layout {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    gap: 30px;
+    padding: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .upload-column, .preview-column {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .upload-column .button-container {
+    margin-top: 20px;
+  }
+
+  .upload-area {
+    width: 100%;
+    flex-shrink: 0;
+  }
+
+  .upload-label {
+    cursor: pointer;
+    display: block;
+  }
+
+  .upload-box {
+    border: 3px dashed rgba(255, 255, 255, 0.3);
+    border-radius: 16px;
+    padding: 40px;
+    height: 480px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    background: rgba(255, 255, 255, 0.05);
+    box-sizing: border-box;
+  }
+
+  .upload-box:hover {
+    border-color: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .uploaded-preview {
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 8px;
+    object-fit: contain;
+  }
+
+  .two-column-layout .image-container {
+    margin-top: 0;
+    height: 480px;
+    flex-shrink: 0;
+  }
+
+  .two-column-layout .image-display {
+    height: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 40px;
+  }
+
+  .upload-placeholder {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .upload-icon {
+    font-size: 64px;
+    display: block;
+    margin-bottom: 16px;
+  }
+
+  .upload-text {
+    font-size: 18px;
+    margin: 0 0 8px 0;
+    font-weight: 500;
+  }
+
+  .upload-hint {
+    font-size: 14px;
+    margin: 0;
+    opacity: 0.7;
+  }
+
+  @media (max-width: 968px) {
+    .two-column-layout {
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+  }
 </style>
 
 <svelte:window on:keydown={handleKeydown} />
@@ -1484,6 +1645,25 @@
     </div>
   </div>
 
+  <!-- Sistema de pestañas -->
+  <div class="tabs-container">
+    <button 
+      class="tab-btn" 
+      class:active={activeTab === 'generate'}
+      on:click={() => activeTab = 'generate'}
+    >
+      Crear
+    </button>
+    <button 
+      class="tab-btn" 
+      class:active={activeTab === 'newTab'}
+      on:click={() => activeTab = 'newTab'}
+    >
+      Face ID
+    </button>
+  </div>
+
+  {#if activeTab === 'generate'}
   <div class="content">
     <div class="text-area-container">
       <textarea maxlength="1000" bind:value={textContent} placeholder={$t('placeholders.prompt')} on:keydown={handleTextareaKeydown}></textarea>
@@ -1654,6 +1834,57 @@
     </div>
   </div>
   </div>
+  {/if}
+  
+  {#if activeTab === 'newTab'}
+  <div class="content new-tab-content">
+    <div class="text-area-container">
+      <textarea maxlength="1000" bind:value={textContent} placeholder={$t('placeholders.prompt')} on:keydown={handleTextareaKeydown}></textarea>
+    </div>
+    
+    <div class="two-column-layout">
+      <div class="upload-column">
+        <div class="upload-area">
+          <label for="image-upload" class="upload-label">
+            <div class="upload-box">
+              {#if uploadedImage}
+                <img src={uploadedImage} alt="Imagen cargada" class="uploaded-preview" />
+              {:else}
+                <div class="upload-placeholder">
+                  <span class="upload-icon">📁</span>
+                  <p class="upload-text">Haz clic para cargar una imagen</p>
+                  <p class="upload-hint">o arrastra y suelta aquí</p>
+                </div>
+              {/if}
+            </div>
+          </label>
+          <input 
+            id="image-upload" 
+            type="file" 
+            accept="image/*" 
+            on:change={handleImageUpload}
+            style="display: none;"
+          />
+        </div>
+        
+        <div class="button-container">
+          <button class="create-button" disabled={isLoading}>
+            {isLoading ? '⏳ ' + $t('buttons.generating') : '🎨 ' + $t('buttons.create')}
+          </button>
+        </div>
+      </div>
+      
+      <div class="preview-column">
+        <div class="image-container">
+          <div class="image-display">
+            <p>{$t('messages.imageAppears')}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {/if}
+  
   {#if showFullImage && generatedImage}
     <div class="fullscreen-backdrop" on:click={() => showFullImage = false}></div>
     <div class="fullscreen-modal">

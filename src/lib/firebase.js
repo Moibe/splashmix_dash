@@ -18,6 +18,16 @@ const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 
+// 🔧 CAMBIAR AQUÍ: true = DEV, false = PROD
+const USE_STRIPE_DEV = true
+
+// Configuración de URL de Stripe Kraken según ambiente
+const STRIPE_KRAKEN_URL = USE_STRIPE_DEV
+  ? 'https://moibe-stripe-kraken-dev.hf.space/creaLinkSesion/'
+  : 'https://moibe-stripe-kraken-prod.hf.space/creaLinkSesion/'
+
+console.log('🔧 Stripe Kraken URL configurada:', STRIPE_KRAKEN_URL, USE_STRIPE_DEV ? '(DEV)' : '(PROD)')
+
 // Función para obtener la cuota disponible de un proveedor (desde flux-ia-182)
 async function getQuotaForProvider(proveedor) {
   try {
@@ -314,6 +324,9 @@ export async function asegurarCamposUsuario(userUid) {
     if (!userData.hasOwnProperty('fecha_registro')) {
       fieldsToAdd.fecha_registro = new Date().toISOString()
     }
+    if (!userData.hasOwnProperty('lifetime')) {
+      fieldsToAdd.lifetime = false
+    }
     
     // Si hay campos que agregar, hacerlo
     if (Object.keys(fieldsToAdd).length > 0) {
@@ -383,7 +396,8 @@ export async function registrarNuevoUsuario(user) {
       streak: 1,  // Racha inicial
       action_call: false,  // Flag de acción
       esta_hora: 0,  // Contador de acciones esta hora
-      ultima_generacion_hora: null  // Timestamp de la última generación
+      ultima_generacion_hora: null,  // Timestamp de la última generación
+      lifetime: false  // Plan lifetime
     })
     console.log('✅ Nuevo usuario registrado:', user.uid, '| País:', country_ip, '| GA:', gaClient)
     return true
@@ -538,6 +552,29 @@ export async function incrementarUsos(user) {
     return true
   } catch (error) {
     console.error('❌ Error incrementando usos:', error)
+    return false
+  }
+}
+
+export async function restarCredito(user) {
+  try {
+    if (!user || !user.uid) {
+      console.warn('⚠️ Usuario no disponible para restar crédito')
+      return false
+    }
+
+    const userDocRef = await getUserDocRefByUid(user.uid)
+    
+    if (!userDocRef) {
+      console.warn('⚠️ No se encontró documento de usuario para:', user.uid)
+      return false
+    }
+
+    await setDoc(userDocRef, { creditos: increment(-1) }, { merge: true })
+    console.log('💳 Crédito restado exitosamente')
+    return true
+  } catch (error) {
+    console.error('❌ Error restando crédito:', error)
     return false
   }
 }
@@ -973,31 +1010,46 @@ export async function crearSesionPago(userUid) {
     const userEmail = userData.email || 'unknown@email.com'
     const gaClient = userData.gaClient || null
     
+    // Obtener el ID del documento (timestamp-correo)
+    const documentId = userDocRef.id
+    console.log('📄 Document ID:', documentId)
+    
     // Obtener país: primero country_ip, luego country_header
     const userCountry = userData.country_ip || userData.country_header || 'MX'
     
     console.log('👤 Datos del usuario para pago:', {
       email: userEmail,
-      firebase_user: userUid,
+      documentId: documentId,
+      uid: userUid,
       gaClient: gaClient,
       country: userCountry
     })
     
-    // Cargar mapeo de precios por país
-    const response = await fetch('/prices-by-country.json')
-    const pricesMap = await response.json()
-    console.log('📋 Mapeo de precios cargado')
+    // En DEV, usar price_id de prueba directamente
+    let priceId, currency, amount
     
-    // Obtener el price_id según el país
-    const priceData = pricesMap[userCountry]
-    if (!priceData) {
-      console.warn(`⚠️ País ${userCountry} no encontrado en el mapeo, usando MX por defecto`)
-      pricesMap['MX'] // fallback a México
+    if (USE_STRIPE_DEV) {
+      priceId = 'price_1SDXvuROVpWRmEfBsAGp37kf'
+      currency = 'USD'
+      amount = 1
+      console.log('🧪 Modo DEV: usando price_id de prueba')
+    } else {
+      // Cargar mapeo de precios por país
+      const response = await fetch('/prices-by-country.json')
+      const pricesMap = await response.json()
+      console.log('📋 Mapeo de precios cargado')
+      
+      // Obtener el price_id según el país
+      const priceData = pricesMap[userCountry]
+      if (!priceData) {
+        console.warn(`⚠️ País ${userCountry} no encontrado en el mapeo, usando MX por defecto`)
+        pricesMap['MX'] // fallback a México
+      }
+      
+      priceId = priceData?.price_id || 'price_1SwUsYIYi36CbmfWu5fqs4oC'
+      currency = priceData?.currency || 'MXN'
+      amount = priceData?.amount || 100
     }
-    
-    const priceId = priceData?.price_id || 'price_1SwUsYIYi36CbmfWu5fqs4oC'
-    const currency = priceData?.currency || 'MXN'
-    const amount = priceData?.amount || 100
     
     console.log('💰 Precio seleccionado:', {
       country: userCountry,
@@ -1011,36 +1063,39 @@ export async function crearSesionPago(userUid) {
     params.append('price_id', priceId)
     params.append('customer_email', userEmail)
     params.append('customer_id', '')
-    params.append('firebase_user', userUid)
+    params.append('firebase_user', documentId)
     params.append('unidades', '9999')
     params.append('mode', 'payment')
     params.append('app', 'imagen')
     params.append('gaCliente', gaClient || '')
+    params.append('sitio', 'crea-imagen')
     
     console.log('📤 Enviando a Stripe Kraken (URLEncoded):', {
       price_id: priceId,
       customer_email: userEmail,
-      firebase_user: userUid,
-      unidades: 10,
+      firebase_user: documentId,
+      unidades: '9999',
       mode: 'payment',
       app: 'imagen',
-      gaCliente: gaClient
+      gaCliente: gaClient,
+      sitio: 'crea-imagen'
     })
     
     // Guardar datos enviados en sessionStorage para verlos después del redirect
     sessionStorage.setItem('lastKrakenRequest', JSON.stringify({
       price_id: priceId,
       customer_email: userEmail,
-      firebase_user: userUid,
-      unidades: 10,
+      firebase_user: documentId,
+      unidades: '9999',
       mode: 'payment',
       app: 'imagen',
       gaCliente: gaClient,
+      sitio: 'crea-imagen',
       timestamp: new Date().toISOString()
     }))
     
     // Llamar a la API de Stripe Kraken
-    const stripeResponse = await fetch('https://moibe-stripe-kraken-prod.hf.space/creaLinkSesion/', {
+    const stripeResponse = await fetch(STRIPE_KRAKEN_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
@@ -1141,6 +1196,16 @@ export async function obtenerPrecioActual(userUid) {
     
     const userData = userDocSnap.data()
     const userCountry = userData.country_ip || userData.country_header || 'MX'
+    
+    // En DEV, retornar precio de prueba
+    if (USE_STRIPE_DEV) {
+      console.log('🧪 Modo DEV: retornando precio de prueba')
+      return {
+        amount: 1,
+        currency: 'USD',
+        country: userCountry
+      }
+    }
     
     // Cargar mapeo de precios por país
     const response = await fetch('/prices-by-country.json')
