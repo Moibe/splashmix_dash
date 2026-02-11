@@ -6,7 +6,8 @@
     "create": "🖼️ Create image",
     "generating": "⏳ Generating...",
     "download": "Download image",
-    "viewFullSize": "View full size"
+    "viewFullSize": "View full size",
+    "close": "Close"
   },
   "placeholders": {
     "prompt": "Write what you want to create here, for example: An astronaut floating in space."
@@ -38,5 +39,35 @@
   "seed": {
     "label": "Seed (Advanced):",
     "random": "Random"
+  },
+  "toasts": {
+    "creatingImage": "✨ Hello, creating image",
+    "paymentError": "❌ Error starting payment",
+    "invalidImage": "⚠️ Please select a valid image",
+    "faceImageRequired": "⚠️ Please load the face image",
+    "poseImageRequired": "⚠️ Please load the pose image",
+    "promptRequired": "⚠️ Please write a prompt",
+    "faceIdGenerated": "✅ Image generated with Face ID",
+    "generationError": "❌ Error generating image: ",
+    "explicitCounterHigh": "⚠️ Explicit Counter > 3",
+    "analyzing": "🔎 Analyzing prompt...",
+    "classifierUnavailable": "⚠️ Classifier unavailable, generating image"
+  },
+  "evaluation": {
+    "promptType": "🧠 Prompt type: ",
+    "classifierError": "⚠️ Classifier unavailable",
+    "styles": "🎨 Styles: ",
+    "noStyles": "🎨 Styles: None",
+    "caravaggioDynamic": "🎨 Automatic style: Caravaggio ✨",
+    "noAutoStyle": "🎨 No automatic style added",
+    "styleDetectionError": "⚠️ Error detecting styles"
+  },
+  "faceid": {
+    "faceImageColumn": "👤 Face Image",
+    "poseImageColumn": "🧍 Pose Image",
+    "resultColumn": "✨ Result",
+    "clickToUpload": "Click to upload",
+    "facePhotoHint": "your face photo",
+    "poseImageHint": "pose image"
   }
 }

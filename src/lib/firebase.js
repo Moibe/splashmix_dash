@@ -327,6 +327,18 @@ export async function asegurarCamposUsuario(userUid) {
     if (!userData.hasOwnProperty('lifetime')) {
       fieldsToAdd.lifetime = false
     }
+    if (!userData.hasOwnProperty('counter_personaje')) {
+      fieldsToAdd.counter_personaje = 0
+    }
+    if (!userData.hasOwnProperty('enabled_faceid')) {
+      fieldsToAdd.enabled_faceid = false
+    }
+    if (!userData.hasOwnProperty('click_buy')) {
+      fieldsToAdd.click_buy = false
+    }
+    if (!userData.hasOwnProperty('cancel_buy')) {
+      fieldsToAdd.cancel_buy = false
+    }
     
     // Si hay campos que agregar, hacerlo
     if (Object.keys(fieldsToAdd).length > 0) {
@@ -397,7 +409,9 @@ export async function registrarNuevoUsuario(user) {
       action_call: false,  // Flag de acción
       esta_hora: 0,  // Contador de acciones esta hora
       ultima_generacion_hora: null,  // Timestamp de la última generación
-      lifetime: false  // Plan lifetime
+      lifetime: false,  // Plan lifetime
+      counter_personaje: 0,  // Contador de personajes generados
+      enabled_faceid: false  // FaceID habilitado
     })
     console.log('✅ Nuevo usuario registrado:', user.uid, '| País:', country_ip, '| GA:', gaClient)
     return true
@@ -736,6 +750,75 @@ export async function incrementarExplicitCounter(user) {
     return false
   }
 }
+
+// Función para incrementar contador de prompts de personajes específicos
+export async function incrementarCounterPersonaje(user) {
+  try {
+    if (!user || !user.uid) {
+      console.warn('⚠️ Usuario no disponible para incrementar counter_personaje')
+      return false
+    }
+
+    const userDocRef = await getUserDocRefByUid(user.uid)
+    
+    if (!userDocRef) {
+      console.warn('⚠️ No se encontró documento de usuario para:', user.uid)
+      return false
+    }
+    
+    // Obtener el documento actual
+    const userDocSnap = await getDoc(userDocRef)
+    
+    if (userDocSnap.exists()) {
+      // Si existe, incrementar el contador
+      const currentCount = userDocSnap.data().counter_personaje || 0
+      await setDoc(userDocRef, { counter_personaje: currentCount + 1 }, { merge: true })
+    } else {
+      // Si no existe el documento, crearlo con counter_personaje = 1
+      await setDoc(userDocRef, { counter_personaje: 1 }, { merge: true })
+    }
+
+    console.log('👤 Contador de personajes incrementado')
+    return true
+  } catch (error) {
+    console.error('❌ Error incrementando counter_personaje:', error)
+    return false
+  }
+}
+
+// Función para marcar click en botón de compra
+export async function marcarClickBuy(userUid) {
+  try {
+    console.log('🛒 Marcando click_buy para usuario:', userUid)
+    const userDocRef = await getUserDocRefByUid(userUid)
+    if (userDocRef) {
+      await setDoc(userDocRef, { click_buy: true }, { merge: true })
+      console.log('✅ click_buy marcado como true')
+      return true
+    }
+    return false
+  } catch (error) {
+    console.error('❌ Error marcando click_buy:', error)
+    return false
+  }
+}
+
+// Función para marcar cancelación de compra
+export async function marcarCancelBuy(userUid) {
+  try {
+    console.log('❌ Marcando cancel_buy para usuario:', userUid)
+    const userDocRef = await getUserDocRefByUid(userUid)
+    if (userDocRef) {
+      await setDoc(userDocRef, { cancel_buy: true }, { merge: true })
+      console.log('✅ cancel_buy marcado como true')
+      return true
+    }
+    return false
+  } catch (error) {
+    console.error('❌ Error marcando cancel_buy:', error)
+    return false
+  }
+}
 export async function registrarErrorEnAPI(user, prompt, errorMessage, proveedor) {
   try {
     const apiUrl = import.meta.env.VITE_API_URL
@@ -952,25 +1035,32 @@ export async function evaluarActionCall(userUid) {
     const actionCallActive = evaluaciones.ritmo || evaluaciones.streak || evaluaciones.explicit || evaluaciones.esta_hora
     
     if (actionCallActive) {
-      console.log('🚨 ACCIÓN REQUERIDA: Al menos un umbral fue superado!')
+      console.log('%c🚨 ACCIÓN REQUERIDA: Al menos un umbral fue superado!', 
+        'background: #ff4444; color: white; padding: 8px 12px; border-radius: 4px; font-weight: bold; font-size: 14px;')
       
       // Identificar cuáles campos gatillaron la acción
       const triggerFields = Object.entries(evaluaciones)
         .filter(([_, v]) => v)
         .map(([k]) => k)
       
-      console.log('📌 Campos que superaron umbral:', triggerFields)
+      console.log('%c📌 Campos que superaron umbral:', 
+        'background: #ffaa00; color: black; padding: 6px 10px; border-radius: 4px; font-weight: bold;', triggerFields)
       
       // Obtener el ID del documento (nombre timestamp-correo)
       const documentId = userDocRef.id
       console.log('📄 Document ID:', documentId)
       
-      // Actualizar action_call a true
-      await setDoc(userDocRef, { action_call: true }, { merge: true })
-      console.log('✅ action_call establecido a TRUE en Firestore')
+      // Actualizar action_call a true y open_use a false
+      await setDoc(userDocRef, { 
+        action_call: true,
+        open_use: false 
+      }, { merge: true })
+      console.log('%c✅ action_call establecido a TRUE y open_use a FALSE en Firestore', 
+        'background: #22aa22; color: white; padding: 6px 10px; border-radius: 4px; font-weight: bold;')
       
       // Actualizar userData localmente antes de enviar a MariaDB
       userData.action_call = true
+      userData.open_use = false
       
       // Registrar la acción en MariaDB con los trigger fields
       console.log('📤 Llamando registrarActionEnMariaDB...') 

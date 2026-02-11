@@ -6,7 +6,8 @@
     "create": "🖼️ Crear imagen",
     "generating": "⏳ Generando...",
     "download": "Descargar imagen",
-    "viewFullSize": "Ver en grande"
+    "viewFullSize": "Ver en grande",
+    "close": "Cerrar"
   },
   "placeholders": {
     "prompt": "Escribe lo que quieres crear aquí, por ejemplo: Un astronauta flotando en el espacio."
@@ -38,5 +39,35 @@
   "seed": {
     "label": "Seed (Avanzado):",
     "random": "Aleatorio"
+  },
+  "toasts": {
+    "creatingImage": "✨ Hola, creando imagen",
+    "paymentError": "❌ Error al iniciar la compra",
+    "invalidImage": "⚠️ Por favor selecciona una imagen válida",
+    "faceImageRequired": "⚠️ Por favor carga la imagen de la cara",
+    "poseImageRequired": "⚠️ Por favor carga la imagen de pose",
+    "promptRequired": "⚠️ Por favor escribe un prompt",
+    "faceIdGenerated": "✅ Imagen generada con Face ID",
+    "generationError": "❌ Error al generar imagen: ",
+    "explicitCounterHigh": "⚠️ Explicit Counter > 3",
+    "analyzing": "🔎 Analizando prompt...",
+    "classifierUnavailable": "⚠️ Clasificador no disponible, generando imagen"
+  },
+  "evaluation": {
+    "promptType": "🧠 Tipo de prompt: ",
+    "classifierError": "⚠️ Clasificador no disponible",
+    "styles": "🎨 Estilos: ",
+    "noStyles": "🎨 Estilos: Ninguno",
+    "caravaggioDynamic": "🎨 Estilo automático: Caravaggio ✨",
+    "noAutoStyle": "🎨 Sin estilo automático agregado",
+    "styleDetectionError": "⚠️ Error detectando estilos"
+  },
+  "faceid": {
+    "faceImageColumn": "👤 Imagen de la Cara",
+    "poseImageColumn": "🧍 Imagen de Pose",
+    "resultColumn": "✨ Resultado",
+    "clickToUpload": "Haz clic para cargar",
+    "facePhotoHint": "tu foto de cara",
+    "poseImageHint": "imagen con pose"
   }
 }

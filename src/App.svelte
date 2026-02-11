@@ -4,9 +4,9 @@
   import { user } from './lib/authStore'
   import { auth } from './lib/firebase'
   import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth'
-  import { Client } from '@gradio/client'
+  import { Client, handle_file } from '@gradio/client'
   import { onMount } from 'svelte'
-  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, restarCredito, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, getUserDocRefByUid, actualizarRitmo, actualizarUltimoUso, guardarCalificacion, asegurarCamposUsuario, limpiarCamposDebug, actualizarEstahora, evaluarActionCall, crearSesionPago, obtenerPrecioActual } from './lib/firebase'
+  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, restarCredito, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, incrementarCounterPersonaje, getUserDocRefByUid, actualizarRitmo, actualizarUltimoUso, guardarCalificacion, asegurarCamposUsuario, limpiarCamposDebug, actualizarEstahora, evaluarActionCall, crearSesionPago, obtenerPrecioActual, marcarClickBuy, marcarCancelBuy } from './lib/firebase'
   import { detectarEstilos } from './lib/openaiStyleDetector'
   import { getRandomAdvice } from './lib/adviceTexts'
   import { t, locale } from 'svelte-i18n'
@@ -24,11 +24,12 @@
   let randomizeSeed = false
   let lastSeed = null
   let showFullImage = false
+  let showFullFaceIDImage = false
   let selectedProvider = null
   let providerInfo = null
   let showLoginPrompt = false
   let showToast = false
-  let toastMessage = '✨ Hola, creando imagen'
+  let toastMessage = $t('toasts.creatingImage')
   let showToastClassification = false
   let toastClassification = ''
   
@@ -56,8 +57,17 @@
   let showWelcomeModal = false // Mostrar modal de bienvenida
   let modalPrice = null // Precio dinámico según país para la modal
   let loadingPayment = false // Mostrar spinner de carga en el botón de comprar
+  // 🏷️ BANDERA DE PESTAÑAS: Cambiar a false para ocultar pestañas y mostrar solo sección "Imagen"
+  let showTabs = false // Controla si se muestran las pestañas o solo la sección default
   let activeTab = 'generate' // 'generate' o 'newTab'
-  let uploadedImage = null // Imagen cargada por el usuario en la nueva pestaña
+  let uploadedImage = null // Imagen facial cargada por el usuario
+  let uploadedPoseImage = null // Imagen de pose cargada por el usuario
+  let faceIDGeneratedImage = null // Imagen generada con Face ID
+
+  // Cuando las pestañas están ocultas, forzar la sección default (Imagen)
+  $: if (!showTabs && activeTab !== 'generate') {
+    activeTab = 'generate'
+  }
 
   // Asegurar campos de usuario cuando ingresa o inicia sesión (una sola vez)
   $: if ($user && !fieldsCleaned) {
@@ -102,6 +112,8 @@
   let userLanguageSet = false // Rastrear si ya se estableció el idioma del usuario
   
   const SPACE_URL = 'https://black-forest-labs-flux-2-dev.hf.space'
+  const FACEID_SPACE_URL = 'https://moibe-instantid2.hf.space'
+  const FACEID_API = '/faceid-api'  // Proxy para evitar CORS
   const isDev = import.meta.env.DEV
   
   // ⚙️ Configuración: Bandera para mostrar toast de clasificación en producción
@@ -158,9 +170,12 @@
 
   // Close fullscreen modal via keyboard for accessibility
   function handleKeydown(event) {
-    if (!showFullImage) return
     if (event.key === 'Escape') {
-      showFullImage = false
+      if (showFullImage) {
+        showFullImage = false
+      } else if (showFullFaceIDImage) {
+        showFullFaceIDImage = false
+      }
     }
   }
 
@@ -239,6 +254,28 @@
       })
   }
 
+  function downloadFaceIDImage() {
+    if (!faceIDGeneratedImage) return
+    
+    // Obtener la imagen como blob y descargar
+    fetch(faceIDGeneratedImage)
+      .then(res => res.blob())
+      .then(blob => {
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `splashmix-faceid-${Date.now()}.png`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+        console.log('⬇️ Imagen Face ID descargada')
+      })
+      .catch(err => {
+        console.error('❌ Error descargando imagen Face ID:', err)
+      })
+  }
+
   async function irAComprar() {
     if (!$user) {
       console.warn('⚠️ Usuario no autenticado')
@@ -247,6 +284,9 @@
     }
 
     console.log('🛒 Iniciando compra para usuario:', $user.uid)
+    
+    // Marcar que el usuario hizo click en comprar
+    await marcarClickBuy($user.uid)
     
     // Configurar timeout para mostrar spinner después de 4 segundos
     const loadingTimeout = setTimeout(() => {
@@ -265,7 +305,7 @@
         window.location.href = paymentLink
       } else {
         console.error('❌ No se pudo obtener el link de pago')
-        toastMessage = '❌ Error al iniciar la compra'
+        toastMessage = $t('toasts.paymentError')
         showToast = true
         setTimeout(() => { showToast = false }, 3000)
       }
@@ -273,7 +313,7 @@
       clearTimeout(loadingTimeout)
       loadingPayment = false
       console.error('❌ Error en irAComprar:', error)
-      toastMessage = '❌ Error al iniciar la compra'
+      toastMessage = $t('toasts.paymentError')
       showToast = true
       setTimeout(() => { showToast = false }, 3000)
     }
@@ -288,9 +328,309 @@
       }
       reader.readAsDataURL(file)
     } else {
-      toastMessage = '⚠️ Por favor selecciona una imagen válida'
+      toastMessage = $t('toasts.invalidImage')
       showToast = true
       setTimeout(() => { showToast = false }, 3000)
+    }
+  }
+
+  function handlePoseImageUpload(event) {
+    const file = event.target.files[0]
+    if (file && file.type.startsWith('image/')) {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        uploadedPoseImage = e.target.result
+      }
+      reader.readAsDataURL(file)
+    } else {
+      toastMessage = $t('toasts.invalidImage')
+      showToast = true
+      setTimeout(() => { showToast = false }, 3000)
+    }
+  }
+
+  // Función para verificar si el Space está accesible
+  async function verificarSpaceAccesible(spaceUrl) {
+    try {
+      console.log('🔍 Verificando accesibilidad del Space:', spaceUrl)
+      
+      // 1. Verificar que la URL base responde
+      const baseResponse = await fetch(spaceUrl, { method: 'GET' })
+      console.log('✅ Space base URL responde:', baseResponse.status)
+      
+      // 2. Intentar obtener info del Space (endpoint estándar de Gradio)
+      try {
+        const infoResponse = await fetch(`${spaceUrl}/info`, { method: 'GET' })
+        if (infoResponse.ok) {
+          const info = await infoResponse.json()
+          console.log('📋 Info del Space:', info)
+          console.log('📋 Endpoints disponibles:', info.named_endpoints || 'No listados')
+          return { ok: true, info: info }
+        }
+      } catch (infoError) {
+        console.warn('⚠️ No se pudo obtener /info del Space')
+      }
+      
+      return { ok: true, info: null }
+    } catch (error) {
+      console.error('❌ Space NO accesible:', error.message)
+      return { ok: false, error: error.message }
+    }
+  }
+
+  async function handleFaceIDGeneration() {
+    // Validar que haya imagen de cara cargada
+    if (!uploadedImage) {
+      toastMessage = $t('toasts.faceImageRequired')
+      showToast = true
+      setTimeout(() => { showToast = false }, 3000)
+      return
+    }
+
+    // Validar que haya imagen de pose cargada
+    if (!uploadedPoseImage) {
+      toastMessage = $t('toasts.poseImageRequired')
+      showToast = true
+      setTimeout(() => { showToast = false }, 3000)
+      return
+    }
+
+    // Validar que haya texto de prompt
+    if (!textContent.trim()) {
+      toastMessage = $t('toasts.promptRequired')
+      showToast = true
+      setTimeout(() => { showToast = false }, 3000)
+      return
+    }
+
+    // Validar que el usuario esté logueado
+    if (!$user) {
+      showLoginPrompt = true
+      return
+    }
+
+    isLoading = true
+    faceIDGeneratedImage = null
+    error = null
+
+    try {
+      console.log('🎭 Iniciando generación Face ID...')
+      console.log('📝 Prompt:', textContent.trim())
+
+      // Convertir las imágenes base64 a Blobs para subirlas
+      const faceResponse = await fetch(uploadedImage);
+      const faceBlob = await faceResponse.blob();
+      
+      const poseResponse = await fetch(uploadedPoseImage);
+      const poseBlob = await poseResponse.blob();
+
+      if (!faceBlob || faceBlob.size === 0) {
+        throw new Error('No se pudo crear el blob de la imagen facial.')
+      }
+      if (!poseBlob || poseBlob.size === 0) {
+        throw new Error('No se pudo crear el blob de la imagen de pose.')
+      }
+      console.log(`✅ Blob facial creado: ${faceBlob.size} bytes (${faceBlob.type})`)
+      console.log(`✅ Blob de pose creado: ${poseBlob.size} bytes (${poseBlob.type})`)
+
+      let attempt = 0;
+      const maxAttempts = 8;
+      let generationSuccess = false;
+      let lastError = null;
+      let imageUrl = null;
+      let selectedProvider = null;
+      let providerInfo = null;
+
+      while (attempt < maxAttempts && !generationSuccess) {
+        attempt += 1
+        imageUrl = null
+        providerInfo = await revisorCuotas()
+        selectedProvider = providerInfo.proveedor
+        const hfToken = providerInfo.token
+
+        console.log(`🔄 Intento ${attempt}/${maxAttempts}`)
+        console.log(`✅ Proveedor seleccionado: ${providerInfo.proveedor}`)
+
+        try {
+          console.log('🔗 Conectando a InstantID2 via proxy...')
+          
+          // === PASO 1: Subir imágenes al Space ===
+          console.log('📁 Subiendo imágenes al Space...')
+          const formData = new FormData()
+          formData.append('files', faceBlob, 'face.png')
+          formData.append('files', poseBlob, 'pose.png')
+          
+          const uploadResponse = await fetch(`${FACEID_API}/gradio_api/upload`, {
+            method: 'POST',
+            headers: hfToken ? { 'Authorization': `Bearer ${hfToken}` } : {},
+            body: formData
+          })
+          
+          if (!uploadResponse.ok) {
+            throw new Error(`Error subiendo imágenes: ${uploadResponse.status}`)
+          }
+          
+          const uploadedFiles = await uploadResponse.json()
+          console.log('✅ Imágenes subidas:', uploadedFiles)
+          // Gradio devuelve: ["/tmp/gradio/...", "/tmp/gradio/..."]
+          const uploadedFacePath = uploadedFiles[0]
+          const uploadedPosePath = uploadedFiles[1] || uploadedFiles[0]  // Usar segunda imagen o la misma
+          
+          // === PASO 2: Llamar al endpoint de predicción con el path del servidor ===
+          console.log('📤 Enviando request a /generate_image...')
+          const predictResponse = await fetch(`${FACEID_API}/gradio_api/call/generate_image`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(hfToken ? { 'Authorization': `Bearer ${hfToken}` } : {})
+            },
+            body: JSON.stringify({
+              data: [
+                { path: uploadedFacePath, meta: { _type: "gradio.FileData" } }, // face_image_path
+                { path: uploadedPosePath, meta: { _type: "gradio.FileData" } }, // pose_image_path
+                textContent.trim(),
+                // "(lowres, low quality, worst quality:1.2), (text:1.2), watermark, (frame:1.2), deformed, ugly, deformed eyes, blur, out of focus, blurry, deformed cat, deformed, photo, anthropomorphic cat, monochrome, photo, pet collar, gun, weapon, blue, 3d, drones, drone, buildings in background, green",
+                "",  // negative_prompt (comentado - usar line anterior si lo necesitas)
+                "(No style)",   // style_name
+                30,             // num_steps
+                0.8,            // identitynet_strength_ratio
+                0.8,            // adapter_strength_ratio
+                0.4,            // canny_strength
+                0.4,            // depth_strength
+                ["depth"],      // controlnet_selection
+                5,              // guidance_scale
+                Math.floor(Math.random() * 2147483647), // seed
+                "EulerDiscreteScheduler",               // scheduler
+                false,          // enable_LCM
+                true            // enhance_face_region
+              ]
+            })
+          })
+          
+          if (!predictResponse.ok) {
+            const errText = await predictResponse.text()
+            throw new Error(`Error en predicción: ${predictResponse.status} - ${errText}`)
+          }
+          
+          const predictResult = await predictResponse.json()
+          const eventId = predictResult.event_id
+          console.log('✅ Predicción iniciada, event_id:', eventId)
+          
+          // === PASO 3: Obtener resultado (SSE polling) ===
+          console.log('⏳ Esperando resultado...')
+          const resultResponse = await fetch(`${FACEID_API}/gradio_api/call/generate_image/${eventId}`, {
+            headers: hfToken ? { 'Authorization': `Bearer ${hfToken}` } : {}
+          })
+          
+          if (!resultResponse.ok) {
+            throw new Error(`Error obteniendo resultado: ${resultResponse.status}`)
+          }
+          
+          const resultText = await resultResponse.text()
+          console.log('📦 Respuesta SSE:', resultText)
+          
+          // Parsear respuesta SSE para encontrar el evento "process_completed" o "complete"
+          // El formato es stream, así que pueden llegar múltiples líneas y eventos
+          const lines = resultText.split('\n')
+          let resultData = null
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.substring(6))
+                // Si data es un array y tiene elementos, asumimos que es el resultado final
+                // (los eventos intermedios "generating" suelen tener otro formato o null)
+                if (Array.isArray(data) && data.length > 0) {
+                   resultData = data
+                   // No hacemos break por si hay más líneas posteriores con el resultado final
+                }
+              } catch (e) {
+                console.warn('⚠️ No se pudo parsear línea:', line)
+              }
+            }
+          }
+          
+          console.log('📦 Resultado final seleccionado:', resultData)
+
+          // Extraer URL de la imagen
+          if (resultData && Array.isArray(resultData) && resultData.length > 0) {
+            // El resultado suele ser [ { image: { path: "..." } }, ... ] o [ { path: "..." } ]
+            // O a veces [ "ruta/temporal" ]
+            const item = resultData[0]
+            
+            console.log('🔍 Inspeccionando item 0:', item)
+
+            if (item && item.url) {
+              imageUrl = item.url.replace(FACEID_SPACE_URL, FACEID_API)
+            } else if (item && item.path) {
+              imageUrl = `${FACEID_API}/gradio_api/file=${item.path}`
+            } else if (item && item.image && item.image.path) {
+              // Estructura anidada común en algunos componentes
+              imageUrl = `${FACEID_API}/gradio_api/file=${item.image.path}`
+            } else if (item && item.image && item.image.url) {
+              imageUrl = item.image.url.replace(FACEID_SPACE_URL, FACEID_API)
+            } else if (typeof item === 'string' && item.startsWith('/')) {
+              // Ruta absoluta temporal
+              imageUrl = `${FACEID_API}/gradio_api/file=${item}`
+            } else if (typeof item === 'string' && item.startsWith('http')) {
+              imageUrl = item.replace(FACEID_SPACE_URL, FACEID_API)
+            }
+          }
+
+          if (!imageUrl) {
+            throw new Error('No se obtuvo URL de imagen del Space')
+          }
+
+          generationSuccess = true
+
+        } catch (attemptError) {
+          const message = attemptError?.message || ''
+          const lowered = typeof message === 'string' ? message.toLowerCase() : ''
+          const quotaExceeded = lowered.includes('pro gpu quota') || lowered.includes('free gpu quota')
+
+          if (quotaExceeded && selectedProvider && selectedProvider !== 'costo') {
+            await marcarProveedorSinCuota(selectedProvider)
+            console.warn(`⚠️ Proveedor sin GPU disponible (${selectedProvider}), reintentando...`)
+            lastError = attemptError
+            imageUrl = null
+            continue
+          }
+
+          throw attemptError
+        }
+      }
+
+      if (!generationSuccess || !imageUrl) {
+        throw lastError || new Error('No se pudo generar la imagen después de múltiples intentos')
+      }
+
+      // Actualizar cuota del proveedor
+      if (selectedProvider && selectedProvider !== 'costo') {
+        await actualizarCuotaDespuesDeGenerar(selectedProvider, providerInfo.quotaDisponible)
+      }
+
+      // Mostrar imagen generada
+      faceIDGeneratedImage = imageUrl
+      console.log('✅ Imagen Face ID generada:', imageUrl)
+
+      toastMessage = $t('toasts.faceIdGenerated')
+      showToast = true
+      setTimeout(() => { showToast = false }, 3000)
+
+      // Actualizar contadores del usuario
+      await restarCredito($user)
+      await incrementarUsos($user)
+      await actualizarRitmo($user)
+      await actualizarEstahora($user.uid)
+      await evaluarActionCall($user.uid)
+
+    } catch (error) {
+      console.error('❌ Error generando Face ID:', error)
+      toastMessage = $t('toasts.generationError') + (error?.message || 'Error desconocido')
+      showToast = true
+      setTimeout(() => { showToast = false }, 5000)
+    } finally {
+      isLoading = false
     }
   }
   
@@ -328,9 +668,9 @@
     showToast = true
     const hasOpenAI = !!import.meta.env.VITE_OPENAI_API_KEY
     if (hasOpenAI) {
-      toastMessage = '🔎 ' + $t('messages.analyzing')
+      toastMessage = $t('toasts.analyzing')
     } else {
-      toastMessage = '⚠️ ' + $t('messages.classifierUnavailable')
+      toastMessage = $t('toasts.classifierUnavailable')
     }
     error = null
     progress = 0
@@ -359,10 +699,10 @@
             if (cls.ok) {
               lastClassification = cls // Guardar clasificación para usar en registro
               const summary = summarizeLabels(cls.labels)
-              toastClassification = `🧠 Tipo de prompt: ${summary}`
+              toastClassification = $t('evaluation.promptType') + summary
               console.log('✅ Clasificación:', cls.labels, '| Razones:', cls.reasons)
             } else {
-              toastClassification = '⚠️ Clasificador no disponible'
+              toastClassification = $t('evaluation.classifierError')
               console.warn('Clasificación fallida:', cls.error || 'sin detalle')
             }
             // Mostrar toast en dev o si está habilitado en prod
@@ -372,7 +712,7 @@
             }
             showToast = false // Ocultar el toast inicial "Analizando prompt"
           } catch (e) {
-            toastClassification = '⚠️ Clasificador no disponible'
+            toastClassification = $t('evaluation.classifierError')
             console.warn('Clasificación error:', e?.message)
             // Mostrar toast en dev o si está habilitado en prod
             if (isDev || showClassificationToastInProd) {
@@ -395,22 +735,22 @@
               lastEstilos = estilosDetectados.estilos // Guardar para usar en registro
               console.log('💾 lastEstilos guardado:', lastEstilos)
               if (estilosDetectados.estilos.length > 0) {
-                toastEstilos = `🎨 Estilos: ${estilosDetectados.estilos.join(', ')}`
+                toastEstilos = $t('evaluation.styles') + estilosDetectados.estilos.join(', ')
                 console.log('✅ Estilos encontrados:', estilosDetectados.estilos)
                 estadoCaravaggio = 'sin estilo agregado' // El usuario escribió el estilo, no fue automático
               } else {
-                toastEstilos = `🎨 Estilos: Ninguno`
+                toastEstilos = $t('evaluation.noStyles')
                 console.log('ℹ️ Sin estilos detectados')
                 // Si no hay estilos, 50% de probabilidad de agregar "al estilo Caravaggio"
                 if (Math.random() < 0.5) {
                   cleanedPrompt = cleanedPrompt + ' al estilo Caravaggio'
                   estadoCaravaggio = 'Caravaggio'
-                  toastCaravaggio = '🎨 Estilo automático: Caravaggio ✨'
+                  toastCaravaggio = $t('evaluation.caravaggioDynamic')
                   console.log('🎨 Estilo automático agregado: Caravaggio')
                   console.log('📝 Prompt modificado:', cleanedPrompt)
                 } else {
                   estadoCaravaggio = 'sin estilo agregado'
-                  toastCaravaggio = '🎨 Sin estilo automático agregado'
+                  toastCaravaggio = $t('evaluation.noAutoStyle')
                   console.log('ℹ️ Sin estilo Caravaggio agregado (probabilidad no cumplida)')
                 }
                 showToastCaravaggio = true
@@ -419,7 +759,7 @@
               console.log('📤 Toast estilos:', toastEstilos)
             } else {
               console.warn('⚠️ Error en detección de estilos')
-              toastEstilos = '⚠️ Error detectando estilos'
+              toastEstilos = $t('evaluation.styleDetectionError')
             }
             showToastEstilos = true
             showToast = false // Ocultar el toast inicial "Analizando prompt"
@@ -465,9 +805,11 @@
         console.log(`✅ Proveedor seleccionado: ${providerInfo.proveedor}`)
         console.log(`📊 Cuota disponible: ${providerInfo.quotaDisponible} segundos`)
         console.log('🔑 Token:', hfToken ? `✅ Presente (${hfToken.slice(0, 10)}...)` : '❌ No encontrado')
+        console.log('🔐 Token completo para verificación:', hfToken)
 
         try {
           console.log('🔗 Conectando a Space:', SPACE_URL)
+          console.log('📤 Parámetros de conexión:', { token: hfToken ? '✅ Presente' : '❌ No encontrado' })
           const client = await Client.connect(SPACE_URL, { token: hfToken })
           console.log('✅ Conexión exitosa al Space')
 
@@ -577,7 +919,7 @@
             if (userDocSnap.exists()) {
               const explicitCount = userDocSnap.data().explicit_counter || 0
               if (explicitCount > 3) {
-                toastMessage = '⚠️ Explicit Counter > 3'
+                toastMessage = $t('toasts.explicitCounterHigh')
                 showToast = true
                 setTimeout(() => { showToast = false }, 3000)
               }
@@ -586,6 +928,12 @@
         } catch (error) {
           console.warn('⚠️ Error verificando explicit_counter:', error)
         }
+      }
+      
+      // Verificar si la clasificación incluye "specific_character" e incrementar contador
+      if (lastClassification && lastClassification.ok && lastClassification.labels && lastClassification.labels.includes('specific_character')) {
+        console.log('👤 Prompt de personaje específico detectado, incrementando contador...')
+        await incrementarCounterPersonaje($user)
       }
 
       // Registrar generación en MariaDB
@@ -1055,10 +1403,10 @@
   }
   
   .image-display img {
-    width: 100%;
-    height: auto;
+    max-width: 100%;
+    max-height: 100%;
     border-radius: 8px;
-    color: white;
+    object-fit: contain;
   }
 
   .image-wrapper {
@@ -1543,7 +1891,7 @@
   .upload-box {
     border: 3px dashed rgba(255, 255, 255, 0.3);
     border-radius: 16px;
-    padding: 40px;
+    padding: 0.75rem;
     height: 480px;
     display: flex;
     align-items: center;
@@ -1575,7 +1923,7 @@
     height: 100%;
     max-width: 100%;
     box-sizing: border-box;
-    padding: 40px;
+    padding: 0.75rem;
   }
 
   .upload-placeholder {
@@ -1601,8 +1949,82 @@
     opacity: 0.7;
   }
 
+  .three-column-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
+    padding: 20px;
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+
+  .column-title {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .three-column-layout .upload-column, .three-column-layout .preview-column {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .three-column-layout .image-container {
+    margin-top: 0;
+    height: 380px;
+    flex-shrink: 0;
+    margin-bottom: 16px;
+  }
+
+  .three-column-layout .image-display {
+    height: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 0.75rem;
+  }
+
+  .three-column-layout .button-container {
+    margin-top: auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .new-tab-content .button-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 20px 0;
+    width: 100%;
+  }
+
+  .preview-column .progress-bar {
+    margin-top: 16px;
+  }
+
+  .three-column-layout .upload-box {
+    height: 380px;
+  }
+
+  @media (max-width: 1200px) {
+    .three-column-layout {
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .three-column-layout .preview-column {
+      grid-column: 1 / -1;
+    }
+  }
+
   @media (max-width: 968px) {
     .two-column-layout {
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+
+    .three-column-layout {
       grid-template-columns: 1fr;
       gap: 20px;
     }
@@ -1646,13 +2068,14 @@
   </div>
 
   <!-- Sistema de pestañas -->
+  {#if showTabs}
   <div class="tabs-container">
     <button 
       class="tab-btn" 
       class:active={activeTab === 'generate'}
       on:click={() => activeTab = 'generate'}
     >
-      Crear
+      Imagen
     </button>
     <button 
       class="tab-btn" 
@@ -1662,6 +2085,7 @@
       Face ID
     </button>
   </div>
+  {/if}
 
   {#if activeTab === 'generate'}
   <div class="content">
@@ -1790,7 +2214,10 @@
           </div>
         </div>
         <p class="stripe-security">Pago Seguro con Stripe ®</p>
-        <button class="close-btn" on:click={() => showActionCallModal = false}>✕</button>
+        <button class="close-btn" on:click={async () => {
+          await marcarCancelBuy($user.uid)
+          showActionCallModal = false
+        }}>✕</button>
       </div>
     </div>
   {/if}
@@ -1842,18 +2269,19 @@
       <textarea maxlength="1000" bind:value={textContent} placeholder={$t('placeholders.prompt')} on:keydown={handleTextareaKeydown}></textarea>
     </div>
     
-    <div class="two-column-layout">
+    <div class="three-column-layout">
       <div class="upload-column">
+        <h3 class="column-title">{$t('faceid.faceImageColumn')}</h3>
         <div class="upload-area">
           <label for="image-upload" class="upload-label">
             <div class="upload-box">
               {#if uploadedImage}
-                <img src={uploadedImage} alt="Imagen cargada" class="uploaded-preview" />
+                <img src={uploadedImage} alt="Imagen facial" class="uploaded-preview" />
               {:else}
                 <div class="upload-placeholder">
                   <span class="upload-icon">📁</span>
-                  <p class="upload-text">Haz clic para cargar una imagen</p>
-                  <p class="upload-hint">o arrastra y suelta aquí</p>
+                  <p class="upload-text">{$t('faceid.clickToUpload')}</p>
+                  <p class="upload-hint">{$t('faceid.facePhotoHint')}</p>
                 </div>
               {/if}
             </div>
@@ -1866,22 +2294,69 @@
             style="display: none;"
           />
         </div>
-        
-        <div class="button-container">
-          <button class="create-button" disabled={isLoading}>
-            {isLoading ? '⏳ ' + $t('buttons.generating') : '🎨 ' + $t('buttons.create')}
-          </button>
+      </div>
+
+      <div class="upload-column">
+        <h3 class="column-title">{$t('faceid.poseImageColumn')}</h3>
+        <div class="upload-area">
+          <label for="pose-upload" class="upload-label">
+            <div class="upload-box">
+              {#if uploadedPoseImage}
+                <img src={uploadedPoseImage} alt="Imagen de pose" class="uploaded-preview" />
+              {:else}
+                <div class="upload-placeholder">
+                  <span class="upload-icon">📁</span>
+                  <p class="upload-text">{$t('faceid.clickToUpload')}</p>
+                  <p class="upload-hint">{$t('faceid.poseImageHint')}</p>
+                </div>
+              {/if}
+            </div>
+          </label>
+          <input 
+            id="pose-upload" 
+            type="file" 
+            accept="image/*" 
+            on:change={handlePoseImageUpload}
+            style="display: none;"
+          />
         </div>
       </div>
       
       <div class="preview-column">
+        <h3 class="column-title">{$t('faceid.resultColumn')}</h3>
         <div class="image-container">
           <div class="image-display">
-            <p>{$t('messages.imageAppears')}</p>
+            {#if faceIDGeneratedImage}
+              <div class="image-wrapper">
+                <img src={faceIDGeneratedImage} alt="Imagen Face ID generada" on:dblclick={() => showFullFaceIDImage = true} />
+                <div class="image-actions">
+                  <button class="action-btn" on:click={() => showFullFaceIDImage = true} title={$t('buttons.viewFullSize')} aria-label={$t('buttons.viewFullSize')}>
+                    ⤢
+                  </button>
+                  <button class="action-btn" on:click={downloadFaceIDImage} title={$t('buttons.download')} aria-label={$t('buttons.download')}>
+                    ⬇️
+                  </button>
+                </div>
+              </div>
+            {:else}
+              <p>{$t('messages.imageAppears')}</p>
+            {/if}
           </div>
         </div>
       </div>
     </div>
+
+    <div class="button-container">
+      <button class="create-button" on:click={handleFaceIDGeneration} disabled={isLoading}>
+        {isLoading ? '⏳ ' + $t('buttons.generating') : '🎨 ' + $t('buttons.create')}
+      </button>
+    </div>
+
+    {#if isLoading}
+      <div class="progress-bar">
+        <div class="progress-fill" style="width: {progress}%"></div>
+      </div>
+    {/if}
   </div>
   {/if}
   
@@ -1889,7 +2364,17 @@
     <div class="fullscreen-backdrop" on:click={() => showFullImage = false}></div>
     <div class="fullscreen-modal">
       <img src={generatedImage} alt="Imagen generada ampliada" on:dblclick={() => showFullImage = false} />
-      <button class="close-fullscreen" on:click={() => showFullImage = false} title="Cerrar" aria-label="Cerrar imagen ampliada">
+      <button class="close-fullscreen" on:click={() => showFullImage = false} title={$t('buttons.close')} aria-label={$t('buttons.close')}>
+        ✕
+      </button>
+    </div>
+  {/if}
+  
+  {#if showFullFaceIDImage && faceIDGeneratedImage}
+    <div class="fullscreen-backdrop" on:click={() => showFullFaceIDImage = false}></div>
+    <div class="fullscreen-modal">
+      <img src={faceIDGeneratedImage} alt="Imagen Face ID ampliada" on:dblclick={() => showFullFaceIDImage = false} />
+      <button class="close-fullscreen" on:click={() => showFullFaceIDImage = false} title={$t('buttons.close')} aria-label={$t('buttons.close')}>
         ✕
       </button>
     </div>
