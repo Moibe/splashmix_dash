@@ -69,5 +69,13 @@
     "clickToUpload": "Haz clic para cargar",
     "facePhotoHint": "tu foto de cara",
     "poseImageHint": "imagen con pose"
+  },
+  "welcome": {
+    "title": "Hola 👋🏻 bienvenido a Splashmix 🐙",
+    "description": "una nueva forma más rápida 🚀, mas precisa 🔍, más brillante ☀️ de generación de imágenes con IA 🤖",
+    "subtitle": "¡¡Gracias por ser uno de los primeros usuarios 🧑🏻‍🚀!!",
+    "finalText": "Puedes probar generar toda clase de imágenes de forma gratuita. Tu opinión 💬 es muy importante.",
+    "startButton": "Comenzar",
+    "googleButton": "🔐 Conecta con Google"
   }
 }

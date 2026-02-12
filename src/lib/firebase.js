@@ -333,12 +333,6 @@ export async function asegurarCamposUsuario(userUid) {
     if (!userData.hasOwnProperty('enabled_faceid')) {
       fieldsToAdd.enabled_faceid = false
     }
-    if (!userData.hasOwnProperty('click_buy')) {
-      fieldsToAdd.click_buy = false
-    }
-    if (!userData.hasOwnProperty('cancel_buy')) {
-      fieldsToAdd.cancel_buy = false
-    }
     
     // Si hay campos que agregar, hacerlo
     if (Object.keys(fieldsToAdd).length > 0) {
@@ -786,17 +780,71 @@ export async function incrementarCounterPersonaje(user) {
   }
 }
 
+// Función para registrar acción de compra en MariaDB
+async function registrarActionCompra(userUid, accion) {
+  try {
+    console.log(`📤 Registrando ${accion} en funel_compra...`)
+    
+    // Obtener datos del usuario
+    const userDocRef = await getUserDocRefByUid(userUid)
+    if (!userDocRef) {
+      console.warn('⚠️ No se encontró referencia del usuario')
+      return false
+    }
+    
+    const userDocSnap = await getDoc(userDocRef)
+    if (!userDocSnap.exists()) {
+      console.warn('⚠️ No se encontró documento del usuario')
+      return false
+    }
+    
+    const userData = userDocSnap.data()
+    const usuarioNombre = userDocRef.id // timestamp-correo
+    const userEmail = userData.email || 'unknown@email.com'
+    const fechaActual = new Date().toISOString()
+    
+    const apiUrl = import.meta.env.VITE_API_URL
+    if (!apiUrl) {
+      console.warn('⚠️ URL de API no configurada')
+      return false
+    }
+    
+    const response = await fetch(`${apiUrl}/funel-compra`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        usuario: usuarioNombre,
+        mail: userEmail,
+        accion: accion,
+        fecha: fechaActual
+      })
+    })
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      console.error(`❌ Error registrando ${accion}:`, errorData)
+      return false
+    }
+    
+    const result = await response.json()
+    console.log(`✅ ${accion} registrado exitosamente en funel_compra:`, result)
+    return true
+  } catch (error) {
+    console.error(`❌ Error en registrarActionCompra (${accion}):`, error)
+    return false
+  }
+}
+
 // Función para marcar click en botón de compra
 export async function marcarClickBuy(userUid) {
   try {
-    console.log('🛒 Marcando click_buy para usuario:', userUid)
-    const userDocRef = await getUserDocRefByUid(userUid)
-    if (userDocRef) {
-      await setDoc(userDocRef, { click_buy: true }, { merge: true })
-      console.log('✅ click_buy marcado como true')
-      return true
-    }
-    return false
+    console.log('🛒 Registrando click_buy para usuario:', userUid)
+    
+    // Registrar en MariaDB
+    await registrarActionCompra(userUid, 'click_buy')
+    return true
   } catch (error) {
     console.error('❌ Error marcando click_buy:', error)
     return false
@@ -806,14 +854,11 @@ export async function marcarClickBuy(userUid) {
 // Función para marcar cancelación de compra
 export async function marcarCancelBuy(userUid) {
   try {
-    console.log('❌ Marcando cancel_buy para usuario:', userUid)
-    const userDocRef = await getUserDocRefByUid(userUid)
-    if (userDocRef) {
-      await setDoc(userDocRef, { cancel_buy: true }, { merge: true })
-      console.log('✅ cancel_buy marcado como true')
-      return true
-    }
-    return false
+    console.log('❌ Registrando cancel_buy para usuario:', userUid)
+    
+    // Registrar en MariaDB
+    await registrarActionCompra(userUid, 'cancel_buy')
+    return true
   } catch (error) {
     console.error('❌ Error marcando cancel_buy:', error)
     return false

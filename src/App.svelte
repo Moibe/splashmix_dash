@@ -15,6 +15,7 @@
   
   let name = 'Svelte Moibe'
   let textContent = ''
+  let textareaElement = null // Referencia al textarea del DOM
   let generatedImage = null
   let isLoading = false
   let error = null
@@ -285,32 +286,27 @@
 
     console.log('🛒 Iniciando compra para usuario:', $user.uid)
     
-    // Marcar que el usuario hizo click en comprar
-    await marcarClickBuy($user.uid)
+    // Mostrar spinner inmediatamente
+    loadingPayment = true
     
-    // Configurar timeout para mostrar spinner después de 4 segundos
-    const loadingTimeout = setTimeout(() => {
-      loadingPayment = true
-    }, 4000)
+    // Registrar click en background
+    marcarClickBuy($user.uid)
     
     try {
       const paymentLink = await crearSesionPago($user.uid)
       
-      // Limpiar timeout si la respuesta llega antes de 4 segundos
-      clearTimeout(loadingTimeout)
-      loadingPayment = false
-      
       if (paymentLink) {
         console.log('🔗 Redirigiendo a:', paymentLink)
+        // El spinner sigue girando mientras se redirige, no detener el loading
         window.location.href = paymentLink
       } else {
         console.error('❌ No se pudo obtener el link de pago')
+        loadingPayment = false
         toastMessage = $t('toasts.paymentError')
         showToast = true
         setTimeout(() => { showToast = false }, 3000)
       }
     } catch (error) {
-      clearTimeout(loadingTimeout)
       loadingPayment = false
       console.error('❌ Error en irAComprar:', error)
       toastMessage = $t('toasts.paymentError')
@@ -635,6 +631,11 @@
   }
   
   async function generateImage() {
+    // Leer el valor directamente del textarea en el DOM
+    if (textareaElement) {
+      textContent = textareaElement.value
+    }
+    
     if (!textContent.trim()) {
       error = $t('messages.writeFirst')
       return
@@ -2090,7 +2091,7 @@
   {#if activeTab === 'generate'}
   <div class="content">
     <div class="text-area-container">
-      <textarea maxlength="1000" bind:value={textContent} placeholder={$t('placeholders.prompt')} on:keydown={handleTextareaKeydown}></textarea>
+      <textarea maxlength="1000" bind:this={textareaElement} bind:value={textContent} placeholder={$t('placeholders.prompt')} on:keydown={handleTextareaKeydown}></textarea>
     </div>
 
     {#if isDev}
@@ -2214,9 +2215,10 @@
           </div>
         </div>
         <p class="stripe-security">Pago Seguro con Stripe ®</p>
-        <button class="close-btn" on:click={async () => {
-          await marcarCancelBuy($user.uid)
+        <button class="close-btn" on:click={() => {
           showActionCallModal = false
+          // Ejecutar en background sin esperar
+          marcarCancelBuy($user.uid)
         }}>✕</button>
       </div>
     </div>
@@ -2225,17 +2227,17 @@
   {#if showWelcomeModal}
     <div class="modal-overlay">
       <div class="modal-box welcome-modal">
-        <p class="welcome-title">Hola 👋🏻 bienvenido a Splashmix 🐙</p>
-        <p class="welcome-text">una nueva forma más rápida 🚀, mas precisa 🔍, más brillante ☀️ de generación de imágenes con IA 🤖</p>
-        <p class="welcome-subtitle">¡¡Gracias por ser uno de los primeros usuarios 🧑🏻‍🚀!!</p>
-        <p class="welcome-text-final">Puedes probar generar toda clase de imágenes de forma gratuita. Tu opinión 💬 es muy importante.</p>
+        <p class="welcome-title">{$t('welcome.title')}</p>
+        <p class="welcome-text">{$t('welcome.description')}</p>
+        <p class="welcome-subtitle">{$t('welcome.subtitle')}</p>
+        <p class="welcome-text-final">{$t('welcome.finalText')}</p>
         {#if $user}
           <button class="welcome-btn" on:click={() => {
             showWelcomeModal = false
             sessionStorage.setItem('welcomeShown', 'true')
-          }}>Comenzar</button>
+          }}>{$t('welcome.startButton')}</button>
         {:else}
-          <button class="welcome-btn" on:click={handleGoogleLoginFromWelcome}>🔐 Conecta con Google</button>
+          <button class="welcome-btn" on:click={handleGoogleLoginFromWelcome}>{$t('welcome.googleButton')}</button>
         {/if}
       </div>
     </div>
@@ -2266,7 +2268,7 @@
   {#if activeTab === 'newTab'}
   <div class="content new-tab-content">
     <div class="text-area-container">
-      <textarea maxlength="1000" bind:value={textContent} placeholder={$t('placeholders.prompt')} on:keydown={handleTextareaKeydown}></textarea>
+      <textarea maxlength="1000" bind:this={textareaElement} bind:value={textContent} placeholder={$t('placeholders.prompt')} on:keydown={handleTextareaKeydown}></textarea>
     </div>
     
     <div class="three-column-layout">
