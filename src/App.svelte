@@ -6,12 +6,17 @@
   import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth'
   import { Client, handle_file } from '@gradio/client'
   import { onMount } from 'svelte'
-  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, restarCredito, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, incrementarCounterPersonaje, getUserDocRefByUid, actualizarRitmo, actualizarUltimoUso, guardarCalificacion, asegurarCamposUsuario, limpiarCamposDebug, actualizarEstahora, evaluarActionCall, crearSesionPago, obtenerPrecioActual, marcarClickBuy, marcarCancelBuy } from './lib/firebase'
+  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, restarCredito, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, incrementarCounterPersonaje, getUserDocRefByUid, actualizarRitmo, actualizarUltimoUso, guardarCalificacion, asegurarCamposUsuario, limpiarCamposDebug, actualizarEstahora, evaluarActionCall, crearSesionPago, obtenerPrecioActual, marcarClickBuy, marcarCancelBuy, cargarConfiguracionStripe } from './lib/firebase'
   import { detectarEstilos } from './lib/openaiStyleDetector'
   import { getRandomAdvice } from './lib/adviceTexts'
   import { t, locale } from 'svelte-i18n'
   import { getLanguageByCountry } from './lib/countryLanguageMap'
   import { getDoc } from 'firebase/firestore'
+  
+  // Cargar configuración de Stripe al iniciar la aplicación
+  onMount(async () => {
+    await cargarConfiguracionStripe()
+  })
   
   let name = 'Svelte Moibe'
   let textContent = ''

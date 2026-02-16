@@ -18,15 +18,35 @@ const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 
-// 🔧 CAMBIAR AQUÍ: true = DEV, false = PROD
-const USE_STRIPE_DEV = true
+// Variable global para ambiente de Stripe (se carga desde Firestore)
+let USE_STRIPE_DEV = false // Default: PROD
 
-// Configuración de URL de Stripe Kraken según ambiente
-const STRIPE_KRAKEN_URL = USE_STRIPE_DEV
-  ? 'https://moibe-stripe-kraken-dev.hf.space/creaLinkSesion/'
-  : 'https://moibe-stripe-kraken-prod.hf.space/creaLinkSesion/'
+// Función para obtener configuración desde Firestore
+export async function cargarConfiguracionStripe() {
+  try {
+    console.log('🔧 Cargando configuración de Stripe desde Firestore...')
+    const configDocRef = doc(db, 'configuraciones', 'stripe')
+    const configSnap = await getDoc(configDocRef)
+    
+    if (configSnap.exists()) {
+      const data = configSnap.data()
+      // amb_stripe puede ser 'dev' o 'prod'
+      USE_STRIPE_DEV = data.amb_stripe === 'dev'
+      console.log(`✅ Configuración cargada: Stripe ${USE_STRIPE_DEV ? 'DEV' : 'PROD'} (amb_stripe: ${data.amb_stripe})`)
+    } else {
+      console.warn('⚠️ No se encontró documento de configuración, usando PROD por default')
+    }
+  } catch (error) {
+    console.error('❌ Error cargando configuración de Stripe:', error)
+  }
+}
 
-console.log('🔧 Stripe Kraken URL configurada:', STRIPE_KRAKEN_URL, USE_STRIPE_DEV ? '(DEV)' : '(PROD)')
+// Función para obtener URL de Stripe Kraken según configuración
+export function getStripeKrakenURL() {
+  return USE_STRIPE_DEV
+    ? 'https://moibe-stripe-kraken-dev.hf.space/creaLinkSesion/'
+    : 'https://moibe-stripe-kraken-prod.hf.space/creaLinkSesion/'
+}
 
 // Función para obtener la cuota disponible de un proveedor (desde flux-ia-182)
 async function getQuotaForProvider(proveedor) {
@@ -1230,7 +1250,9 @@ export async function crearSesionPago(userUid) {
     }))
     
     // Llamar a la API de Stripe Kraken
-    const stripeResponse = await fetch(STRIPE_KRAKEN_URL, {
+    const stripeKrakenURL = getStripeKrakenURL()
+    console.log('🔗 Usando Stripe URL:', stripeKrakenURL)
+    const stripeResponse = await fetch(stripeKrakenURL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
