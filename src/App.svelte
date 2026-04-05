@@ -143,6 +143,13 @@
   const originalConsoleWarn = console.warn
   const originalConsoleError = console.error
 
+  // En producción, deshabilitar logs INMEDIATAMENTE (antes de que cualquier código logee)
+  // Solo se rehabilitarán si Firestore dice verbose-prod=true
+  if (!isDev) {
+    console.log = () => {}
+    console.warn = () => {}
+  }
+
   // Detectar idioma cuando el usuario se loguea
   $: if ($user && !userLanguageSet) {
     detectUserLanguage()
