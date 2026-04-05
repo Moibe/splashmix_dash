@@ -54,16 +54,16 @@ export function escucharConfiguracionVerbose(onChangeCallback) {
       const data = snap.data()
       VERBOSE_PROD = data['verbose-prod'] ?? false
       VERBOSE_DEV = data['verbose-dev'] ?? true
-      console.log(`🔄 Verbosidad actualizada: DEV=${VERBOSE_DEV}, PROD=${VERBOSE_PROD}`)
     } else {
-      console.warn('⚠️ No se encontró documento de verbosidad, usando defaults')
+      VERBOSE_PROD = false
+      VERBOSE_DEV = true
     }
-    if (onChangeCallback) onChangeCallback()
+    if (onChangeCallback) onChangeCallback(VERBOSE_PROD, VERBOSE_DEV)
   }, (error) => {
     console.error('❌ Error escuchando configuración de verbosidad:', error)
   })
   
-  return unsubscribe // Para cancelar el listener si es necesario
+  return unsubscribe
 }
 
 // Función para obtener URL de Stripe Kraken según configuración

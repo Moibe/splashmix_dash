@@ -6,7 +6,7 @@
   import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth'
   import { Client, handle_file } from '@gradio/client'
   import { onMount } from 'svelte'
-  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, restarCredito, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, incrementarCounterPersonaje, getUserDocRefByUid, actualizarRitmo, actualizarUltimoUso, guardarCalificacion, asegurarCamposUsuario, limpiarCamposDebug, actualizarEstahora, evaluarActionCall, crearSesionPago, obtenerPrecioActual, marcarClickBuy, marcarCancelBuy, cargarConfiguracionStripe, escucharConfiguracionVerbose, VERBOSE_PROD, VERBOSE_DEV } from './lib/firebase'
+  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, restarCredito, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, incrementarCounterPersonaje, getUserDocRefByUid, actualizarRitmo, actualizarUltimoUso, guardarCalificacion, asegurarCamposUsuario, limpiarCamposDebug, actualizarEstahora, evaluarActionCall, crearSesionPago, obtenerPrecioActual, marcarClickBuy, marcarCancelBuy, cargarConfiguracionStripe, escucharConfiguracionVerbose } from './lib/firebase'
   import { detectarEstilos } from './lib/openaiStyleDetector'
   import { getRandomAdvice } from './lib/adviceTexts'
   import { t, locale } from 'svelte-i18n'
@@ -18,8 +18,15 @@
     await cargarConfiguracionStripe()
     
     // Escuchar verbosidad en tiempo real desde Firestore
-    escucharConfiguracionVerbose(() => {
-      disableLogsIfNeeded()
+    escucharConfiguracionVerbose((verboseProd, verboseDev) => {
+      const shouldDisable = isDev ? !verboseDev : !verboseProd
+      if (shouldDisable) {
+        console.log = () => {}
+        console.warn = () => {}
+      } else {
+        console.log = originalConsoleLog
+        console.warn = originalConsoleWarn
+      }
     })
   })
   
@@ -134,23 +141,6 @@
   const originalConsoleLog = console.log
   const originalConsoleWarn = console.warn
   const originalConsoleError = console.error
-  
-  // Permitir logs inicialmente para cargar configuraciones
-  // Después se deshabilitan en onMount si es necesario
-  let logsDisabled = false
-  
-  const disableLogsIfNeeded = () => {
-    const shouldDisable = isDev ? !VERBOSE_DEV : !VERBOSE_PROD
-    if (shouldDisable && !logsDisabled) {
-      logsDisabled = true
-      console.log = () => {}
-      console.warn = () => {}
-    } else if (!shouldDisable && logsDisabled) {
-      logsDisabled = false
-      console.log = originalConsoleLog
-      console.warn = originalConsoleWarn
-    }
-  }
 
   // Detectar idioma cuando el usuario se loguea
   $: if ($user && !userLanguageSet) {
