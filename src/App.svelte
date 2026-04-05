@@ -20,6 +20,7 @@
     // Escuchar verbosidad en tiempo real desde Firestore
     escucharConfiguracionVerbose((verboseProd, verboseDev) => {
       const shouldDisable = isDev ? !verboseDev : !verboseProd
+      originalConsoleLog(`🔧 Verbosidad: modo=${isDev ? 'DEV' : 'PROD'}, verbose-prod=${verboseProd}, verbose-dev=${verboseDev} → logs ${shouldDisable ? 'DESACTIVADOS' : 'ACTIVADOS'}`)
       if (shouldDisable) {
         console.log = () => {}
         console.warn = () => {}
