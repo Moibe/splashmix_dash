@@ -17,6 +17,8 @@
   onMount(async () => {
     await cargarConfiguracionStripe()
     await cargarConfiguracionVerbose()
+    // Después de cargar verbosity, deshabilitar logs si es necesario
+    disableLogsIfNeeded()
   })
   
   let name = 'Svelte Moibe'
@@ -131,19 +133,19 @@
   const originalConsoleWarn = console.warn
   const originalConsoleError = console.error
   
-  // Deshabilitar logs según configuración de Firestore
-  const shouldDisableLogs = () => {
-    if (isDev) {
-      return !VERBOSE_DEV // En desarrollo, deshabilita si VERBOSE_DEV es false
-    } else {
-      return !VERBOSE_PROD // En producción, deshabilita si VERBOSE_PROD es false
-    }
-  }
+  // Permitir logs inicialmente para cargar configuraciones
+  // Después se deshabilitan en onMount si es necesario
+  let logsDisabled = false
   
-  if (shouldDisableLogs()) {
-    console.log = () => {}
-    console.warn = () => {}
-    // console.error se mantiene siempre visible por seguridad
+  const disableLogsIfNeeded = () => {
+    if (logsDisabled) return // Ya deshabilitados
+    
+    const shouldDisable = isDev ? !VERBOSE_DEV : !VERBOSE_PROD
+    if (shouldDisable) {
+      logsDisabled = true
+      console.log = () => {}
+      console.warn = () => {}
+    }
   }
 
   // Detectar idioma cuando el usuario se loguea
