@@ -1108,17 +1108,17 @@ export async function evaluarActionCall(userUid) {
     
     // Evaluar cada campo
     const evaluaciones = {
-      ritmo: (userData.ritmo || 0) > thresholds.ritmo,
-      streak: (userData.streak || 0) > thresholds.streak,
-      explicit: (userData.explicit_counter || 0) > thresholds.explicit,
-      esta_hora: (userData.esta_hora || 0) > thresholds.esta_hora
+      ritmo: (userData.ritmo || 0) >= thresholds.ritmo,
+      streak: (userData.streak || 0) >= thresholds.streak,
+      explicit: (userData.explicit_counter || 0) >= thresholds.explicit,
+      esta_hora: (userData.esta_hora || 0) >= thresholds.esta_hora
     }
     
     console.log('⚖️ Comparación:', {
-      ritmo: `${userData.ritmo || 0} > ${thresholds.ritmo} = ${evaluaciones.ritmo}`,
-      streak: `${userData.streak || 0} > ${thresholds.streak} = ${evaluaciones.streak}`,
-      explicit: `${userData.explicit_counter || 0} > ${thresholds.explicit} = ${evaluaciones.explicit}`,
-      esta_hora: `${userData.esta_hora || 0} > ${thresholds.esta_hora} = ${evaluaciones.esta_hora}`
+      ritmo: `${userData.ritmo || 0} >= ${thresholds.ritmo} = ${evaluaciones.ritmo}`,
+      streak: `${userData.streak || 0} >= ${thresholds.streak} = ${evaluaciones.streak}`,
+      explicit: `${userData.explicit_counter || 0} >= ${thresholds.explicit} = ${evaluaciones.explicit}`,
+      esta_hora: `${userData.esta_hora || 0} >= ${thresholds.esta_hora} = ${evaluaciones.esta_hora}`
     })
     
     // Si alguno supera, cambiar action_call a true
