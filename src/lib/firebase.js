@@ -21,6 +21,10 @@ export const db = getFirestore(app)
 // Variable global para ambiente de Stripe (se carga desde Firestore)
 let USE_STRIPE_DEV = false // Default: PROD
 
+// Variables globales para verbosidad (se cargan desde Firestore)
+export let VERBOSE_PROD = false // Default: sin logs en producción
+export let VERBOSE_DEV = true // Default: con logs en desarrollo
+
 // Función para obtener configuración desde Firestore
 export async function cargarConfiguracionStripe() {
   try {
@@ -38,6 +42,26 @@ export async function cargarConfiguracionStripe() {
     }
   } catch (error) {
     console.error('❌ Error cargando configuración de Stripe:', error)
+  }
+}
+
+// Función para cargar configuración de verbosidad desde Firestore
+export async function cargarConfiguracionVerbose() {
+  try {
+    console.log('🔧 Cargando configuración de verbosidad desde Firestore...')
+    const configDocRef = doc(db, 'configuraciones', 'verbose')
+    const configSnap = await getDoc(configDocRef)
+    
+    if (configSnap.exists()) {
+      const data = configSnap.data()
+      VERBOSE_PROD = data['verbose-prod'] ?? false
+      VERBOSE_DEV = data['verbose-dev'] ?? true
+      console.log(`✅ Verbosidad cargada: DEV=${VERBOSE_DEV}, PROD=${VERBOSE_PROD}`)
+    } else {
+      console.warn('⚠️ No se encontró documento de verbosidad, usando defaults')
+    }
+  } catch (error) {
+    console.error('❌ Error cargando configuración de verbosidad:', error)
   }
 }
 

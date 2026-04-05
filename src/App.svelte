@@ -6,16 +6,17 @@
   import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth'
   import { Client, handle_file } from '@gradio/client'
   import { onMount } from 'svelte'
-  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, restarCredito, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, incrementarCounterPersonaje, getUserDocRefByUid, actualizarRitmo, actualizarUltimoUso, guardarCalificacion, asegurarCamposUsuario, limpiarCamposDebug, actualizarEstahora, evaluarActionCall, crearSesionPago, obtenerPrecioActual, marcarClickBuy, marcarCancelBuy, cargarConfiguracionStripe } from './lib/firebase'
+  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, restarCredito, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, incrementarCounterPersonaje, getUserDocRefByUid, actualizarRitmo, actualizarUltimoUso, guardarCalificacion, asegurarCamposUsuario, limpiarCamposDebug, actualizarEstahora, evaluarActionCall, crearSesionPago, obtenerPrecioActual, marcarClickBuy, marcarCancelBuy, cargarConfiguracionStripe, cargarConfiguracionVerbose, VERBOSE_PROD, VERBOSE_DEV } from './lib/firebase'
   import { detectarEstilos } from './lib/openaiStyleDetector'
   import { getRandomAdvice } from './lib/adviceTexts'
   import { t, locale } from 'svelte-i18n'
   import { getLanguageByCountry } from './lib/countryLanguageMap'
   import { getDoc } from 'firebase/firestore'
   
-  // Cargar configuración de Stripe al iniciar la aplicación
+  // Cargar configuraciones al iniciar la aplicación
   onMount(async () => {
     await cargarConfiguracionStripe()
+    await cargarConfiguracionVerbose()
   })
   
   let name = 'Svelte Moibe'
@@ -125,15 +126,21 @@
   // ⚙️ Configuración: Bandera para mostrar toast de clasificación en producción
   const showClassificationToastInProd = false // Cambiar a true para ver el toast en producción
   
-  // ⚙️ Configuración: Bandera para mostrar logs de consola en producción
-  const showConsoleLogsInProd = false // Cambiar a true para ver logs en producción
-  
-  // Wrapper para console.log que respeta las banderas
+  // Wrapper para console.log que respeta las banderas de Firestore (VERBOSE_PROD/VERBOSE_DEV)
   const originalConsoleLog = console.log
   const originalConsoleWarn = console.warn
   const originalConsoleError = console.error
   
-  if (!isDev && !showConsoleLogsInProd) {
+  // Deshabilitar logs según configuración de Firestore
+  const shouldDisableLogs = () => {
+    if (isDev) {
+      return !VERBOSE_DEV // En desarrollo, deshabilita si VERBOSE_DEV es false
+    } else {
+      return !VERBOSE_PROD // En producción, deshabilita si VERBOSE_PROD es false
+    }
+  }
+  
+  if (shouldDisableLogs()) {
     console.log = () => {}
     console.warn = () => {}
     // console.error se mantiene siempre visible por seguridad
