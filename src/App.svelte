@@ -6,7 +6,7 @@
   import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth'
   import { Client, handle_file } from '@gradio/client'
   import { onMount } from 'svelte'
-  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, restarCredito, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, incrementarCounterPersonaje, getUserDocRefByUid, actualizarRitmo, actualizarUltimoUso, guardarCalificacion, asegurarCamposUsuario, limpiarCamposDebug, actualizarEstahora, evaluarActionCall, crearSesionPago, obtenerPrecioActual, marcarClickBuy, marcarCancelBuy, cargarConfiguracionStripe, cargarConfiguracionVerbose, VERBOSE_PROD, VERBOSE_DEV } from './lib/firebase'
+  import { revisorCuotas, actualizarCuotaDespuesDeGenerar, marcarProveedorSinCuota, incrementarUsos, restarCredito, registrarGeneracionEnAPI, registrarErrorEnAPI, incrementarExplicitCounter, incrementarCounterPersonaje, getUserDocRefByUid, actualizarRitmo, actualizarUltimoUso, guardarCalificacion, asegurarCamposUsuario, limpiarCamposDebug, actualizarEstahora, evaluarActionCall, crearSesionPago, obtenerPrecioActual, marcarClickBuy, marcarCancelBuy, cargarConfiguracionStripe, escucharConfiguracionVerbose, VERBOSE_PROD, VERBOSE_DEV } from './lib/firebase'
   import { detectarEstilos } from './lib/openaiStyleDetector'
   import { getRandomAdvice } from './lib/adviceTexts'
   import { t, locale } from 'svelte-i18n'
@@ -16,9 +16,11 @@
   // Cargar configuraciones al iniciar la aplicación
   onMount(async () => {
     await cargarConfiguracionStripe()
-    await cargarConfiguracionVerbose()
-    // Después de cargar verbosity, deshabilitar logs si es necesario
-    disableLogsIfNeeded()
+    
+    // Escuchar verbosidad en tiempo real desde Firestore
+    escucharConfiguracionVerbose(() => {
+      disableLogsIfNeeded()
+    })
   })
   
   let name = 'Svelte Moibe'
@@ -138,13 +140,15 @@
   let logsDisabled = false
   
   const disableLogsIfNeeded = () => {
-    if (logsDisabled) return // Ya deshabilitados
-    
     const shouldDisable = isDev ? !VERBOSE_DEV : !VERBOSE_PROD
-    if (shouldDisable) {
+    if (shouldDisable && !logsDisabled) {
       logsDisabled = true
       console.log = () => {}
       console.warn = () => {}
+    } else if (!shouldDisable && logsDisabled) {
+      logsDisabled = false
+      console.log = originalConsoleLog
+      console.warn = originalConsoleWarn
     }
   }
 

@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { getFirestore, doc, setDoc, getDoc, collection, addDoc, increment, query, where, getDocs, deleteField } from 'firebase/firestore'
+import { getFirestore, doc, setDoc, getDoc, collection, addDoc, increment, query, where, getDocs, deleteField, onSnapshot } from 'firebase/firestore'
 import { dbQuota } from './firebaseQuota'
 import { tokens, proveedores, process_cost, process_margin, api_cost } from './bridges'
 
@@ -45,24 +45,25 @@ export async function cargarConfiguracionStripe() {
   }
 }
 
-// Función para cargar configuración de verbosidad desde Firestore
-export async function cargarConfiguracionVerbose() {
-  try {
-    console.log('🔧 Cargando configuración de verbosidad desde Firestore...')
-    const configDocRef = doc(db, 'configuraciones', 'verbose')
-    const configSnap = await getDoc(configDocRef)
-    
-    if (configSnap.exists()) {
-      const data = configSnap.data()
+// Escucha en tiempo real la configuración de verbosidad desde Firestore
+export function escucharConfiguracionVerbose(onChangeCallback) {
+  const configDocRef = doc(db, 'configuraciones', 'verbose')
+  
+  const unsubscribe = onSnapshot(configDocRef, (snap) => {
+    if (snap.exists()) {
+      const data = snap.data()
       VERBOSE_PROD = data['verbose-prod'] ?? false
       VERBOSE_DEV = data['verbose-dev'] ?? true
-      console.log(`✅ Verbosidad cargada: DEV=${VERBOSE_DEV}, PROD=${VERBOSE_PROD}`)
+      console.log(`🔄 Verbosidad actualizada: DEV=${VERBOSE_DEV}, PROD=${VERBOSE_PROD}`)
     } else {
       console.warn('⚠️ No se encontró documento de verbosidad, usando defaults')
     }
-  } catch (error) {
-    console.error('❌ Error cargando configuración de verbosidad:', error)
-  }
+    if (onChangeCallback) onChangeCallback()
+  }, (error) => {
+    console.error('❌ Error escuchando configuración de verbosidad:', error)
+  })
+  
+  return unsubscribe // Para cancelar el listener si es necesario
 }
 
 // Función para obtener URL de Stripe Kraken según configuración
