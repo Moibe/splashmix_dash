@@ -1278,7 +1278,7 @@
   textarea {
     width: 100%;
     max-width: 600px;
-    min-height: 20px;
+    min-height: 300px;
     padding: 1rem;
     border: 2px solid rgba(255, 255, 255, 0.3);
     border-radius: 8px;
@@ -2107,7 +2107,7 @@
   {#if activeTab === 'generate'}
   <div class="content">
     <div class="text-area-container">
-      <textarea maxlength="1000" bind:this={textareaElement} bind:value={textContent} placeholder={$t('placeholders.prompt')} on:keydown={handleTextareaKeydown}></textarea>
+      <textarea maxlength="50000" bind:this={textareaElement} bind:value={textContent} placeholder={$t('placeholders.prompt')} on:keydown={handleTextareaKeydown}></textarea>
     </div>
 
     {#if isDev}
@@ -2284,7 +2284,7 @@
   {#if activeTab === 'newTab'}
   <div class="content new-tab-content">
     <div class="text-area-container">
-      <textarea maxlength="1000" bind:this={textareaElement} bind:value={textContent} placeholder={$t('placeholders.prompt')} on:keydown={handleTextareaKeydown}></textarea>
+      <textarea maxlength="50000" bind:this={textareaElement} bind:value={textContent} placeholder={$t('placeholders.prompt')} on:keydown={handleTextareaKeydown}></textarea>
     </div>
     
     <div class="three-column-layout">
