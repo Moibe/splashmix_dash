@@ -38,7 +38,7 @@ jobs:
 
       - name: Pull latest code on server
         run: |
-          ssh root@imagen.splashmix.ink "cd /root/code/splashmix_dash && git pull origin main"
+          ssh root@imagen.splashmix.ink "cd /root/code/splashmix_dash && git fetch origin main && git reset --keep FETCH_HEAD"
 
       - name: Deploy to server
         run: |
